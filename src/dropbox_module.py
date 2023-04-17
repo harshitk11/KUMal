@@ -308,7 +308,7 @@ def generate_parser_info(dbx, dbx_path, dataset_type, benchmark_flag, load_flag,
                         dataset_type=dataset_type, benchmark_flag=benchmark_flag, 
                         f_save_base_folder = base_folder_location)
 
-def create_parser_info_for_all_datasets_usenix_winter(dbx, base_folder_location, load_flag):
+def create_parser_info_for_all_datasets_kumal(dbx, base_folder_location, load_flag):
     """
     Creates parser_info files for all the datasets for the Winter submission.
     params:
@@ -339,50 +339,6 @@ def create_parser_info_for_all_datasets_usenix_winter(dbx, base_folder_location,
         generate_parser_info(dbx=dbx, dbx_path=val["dbx_path"], dataset_type=dtype, 
                             benchmark_flag=False, load_flag = load_flag, base_folder_location = base_folder_location)
 
-    # Generating parser info for the BENCH-dataset
-    # Benchmark logs are divided over three different folders
-    bench_dataset_info={"bench1":"/results_benchmark_benign_with_reboot_using_benchmark_collection_module",
-                "bench2":"/results_benchmark_benign_with_reboot_using_benchmark_collection_module_part2",
-                "bench3":"/results_benchmark_benign_with_reboot_using_benchmark_collection_module_part3"}
-    
-    for dtype, dbx_path in bench_dataset_info.items():
-        print(f"--------------------- Generating parser_info for {dtype} ---------------------")
-        generate_parser_info(dbx=dbx, dbx_path=dbx_path, dataset_type=dtype, benchmark_flag=True, 
-                            load_flag=load_flag, base_folder_location = base_folder_location)
-
-def create_parser_info_for_all_datasets_usenix_summer(dbx, base_folder_location, load_flag):
-    """
-    Creates parser_info files for all the datasets.
-    params:
-        - dbx : dropbox token
-        - base_folder_location : location of the base folder where all the logs are stored
-        - load_flag : if 1, then will load the previous json containing the apk folder vs num logcat files
-    """
-    # Generating parser info for STD-dataset and CD-dataset
-    ## NOTE : Make sure the folder name is preceeded by a backslash 
-    std_cd_dataset_info = {
-                "std_malware":{"dbx_path":"/results_android_zoo_malware_all_rerun", "app_type":"malware", "dtype":"std_malware"},
-                "std_benign":{"dbx_path":"/results_android_zoo_benign_with_reboot", "app_type":"benign", "dtype":"std_benign"},
-                "cd_malware":{"dbx_path":"/results_android_zoo_unknown_malware", "app_type":"malware", "dtype":"cd_malware"},
-                "cd_benign":{"dbx_path":"/results_android_zoo_unknown_benign", "app_type":"benign", "dtype":"cd_benign"}
-                }
-
-    for dtype, val in std_cd_dataset_info.items():
-        print(f"--------------------- Generating parser_info for {dtype} ---------------------")
-        generate_parser_info(dbx=dbx, dbx_path=val["dbx_path"], dataset_type=dtype, 
-                            benchmark_flag=False, load_flag = load_flag, base_folder_location = base_folder_location)
-
-    # Generating parser info for the BENCH-dataset
-    # Benchmark logs are divided over three different folders
-    bench_dataset_info={"bench1":"/results_benchmark_benign_with_reboot_using_benchmark_collection_module",
-                "bench2":"/results_benchmark_benign_with_reboot_using_benchmark_collection_module_part2",
-                "bench3":"/results_benchmark_benign_with_reboot_using_benchmark_collection_module_part3"}
-    
-    for dtype, dbx_path in bench_dataset_info.items():
-        print(f"--------------------- Generating parser_info for {dtype} ---------------------")
-        generate_parser_info(dbx=dbx, dbx_path=dbx_path, dataset_type=dtype, benchmark_flag=True, 
-                            load_flag=load_flag, base_folder_location = base_folder_location)
-
 
 #################################### Function to analyse the statistics of information in parser_info dict ####################################
 class analyse_parser_info_dict:
@@ -409,9 +365,9 @@ class analyse_parser_info_dict:
             - base_dir: path of the src directory of the XMD repository
         """
         # Path where the parser info logs are stored
-        self.parser_info_dir = os.path.join(base_dir.replace("/src",""),"res/parser_info_files/winter")
+        self.parser_info_dir = os.path.join(base_dir.replace("/src",""),"res/parser_info_files/kumal")
         # Path where the plots are stored
-        self.output_dir_plots = os.path.join(base_dir.replace("/src",""),"plots/dataset_characterization/winter")
+        self.output_dir_plots = os.path.join(base_dir.replace("/src",""),"plots/dataset_characterization/kumal")
 
         if not os.path.isdir(self.output_dir_plots):
             os.system(f"mkdir -p {self.output_dir_plots}")
@@ -430,6 +386,10 @@ class analyse_parser_info_dict:
         # create a dataframe
         d = {'runtime':runtime_per_file, 'apk type':app_type_per_file}
         df = pd.DataFrame(data=d)
+
+        # calculate percentiles for each group of 'apk type'
+        percentiles = df.groupby('apk type')['runtime'].quantile([0.25, 0.5, 0.75])
+        print(f"percentiles for {dataset_name} : {percentiles}")
 
         plt.plot()
         palette = ['#5cd65c','#ff5050']
@@ -521,51 +481,17 @@ def main():
     print('...authenticated with Dropbox owned by ' + dbx.users_get_current_account().name.display_name)
 
     # Location of the base folder where all the parser info logs will be stored and loaded from 
-    base_folder_location = os.path.join(dir_path.replace("/src",""),"res/parser_info_files/winter")
+    base_folder_location = os.path.join(dir_path.replace("/src",""),"res/parser_info_files/kumal")
     
     if not os.path.isdir(base_folder_location):
         os.system(f"mkdir -p {base_folder_location}")
 
-    # ######################################### Generating parser_info for STD-Dataset and CD-Dataset ###########################################
-    # # Paths for all the folders of interest in dropbox
-    # dataset_type = ["std_malware", "std_benign", "cd_malware", "cd_benign"]
-    
-    # ## NOTE : Make sure the folder name is preceeded by a backslash 
-    # std_cd_dataset_info = {
-    #             "std_malware":{"dbx_path":"/results_android_zoo_malware_all_rerun", "app_type":"malware", "dtype":"std_malware"},
-    #             "std_benign":{"dbx_path":"/results_android_zoo_benign_with_reboot", "app_type":"benign", "dtype":"std_benign"},
-    #             "cd_malware":{"dbx_path":"/results_android_zoo_unknown_malware", "app_type":"malware", "dtype":"cd_malware"},
-    #             "cd_benign":{"dbx_path":"/results_android_zoo_unknown_benign", "app_type":"benign", "dtype":"cd_benign"}
-    #             }
-
-    # datType = dataset_type[2]
-    # dtype = std_cd_dataset_info[datType]["dtype"]
-    # dbx_path = std_cd_dataset_info[datType]["dbx_path"]
-    # generate_parser_info(dbx=dbx, dbx_path=dbx_path, dataset_type=dtype, benchmark_flag=False, load_flag = 1, base_folder_location=base_folder_location)
-    # ############################################################################################################################################
-
-    # ################################################ Generating parser_info for benchmark apks #################################################
-    # ## NOTE : Make sure the folder name is preceeded by a backslash 
-    # # Benchmark logs are divided over three different folders
-    # bench_dataset_info={"bench1":"/results_benchmark_benign_with_reboot_using_benchmark_collection_module",
-    #             "bench2":"/results_benchmark_benign_with_reboot_using_benchmark_collection_module_part2",
-    #             "bench3":"/results_benchmark_benign_with_reboot_using_benchmark_collection_module_part3"}
-    
-    # for dtype, dbx_path in bench_dataset_info.items():
-    #     generate_parser_info(dbx=dbx, dbx_path=dbx_path, dataset_type=dtype, benchmark_flag=True, load_flag=0, base_folder_location=base_folder_location)
-    # ############################################################################################################################################
-
     # Generating parser_info for all the datasets [STD, CD, and BENCH dataset]
-    # create_parser_info_for_all_datasets_usenix_summer(dbx, base_folder_location=base_folder_location, load_flag=1)
-    # create_parser_info_for_all_datasets_usenix_winter(dbx, base_folder_location=base_folder_location, load_flag=0)
+    # create_parser_info_for_all_datasets_kumal(dbx, base_folder_location=base_folder_location, load_flag=0)
     # exit()
+    
     # ################################################### Analyze the parser_info dicts ############################################################
-    # # Generate the runtime distribution plots
-    # dataset_characterization = analyse_parser_info_dict(base_dir=dir_path)
-    # dataset_characterization.generate_runtime_distribution_plot_per_dataset(dataset_type = 'std', plot_flag=True)
-    # dataset_characterization.generate_runtime_distribution_plot_per_dataset(dataset_type = 'cd', plot_flag=True)
-    # dataset_characterization.generate_runtime_distribution_plot_all_datasets(plot_flag=True)
-
+    # Generate the runtime distribution plots
     dataset_characterization = analyse_parser_info_dict(base_dir=dir_path)
     dataset_characterization.generate_runtime_distribution_plot_per_dataset(dataset_name = 'cdyear1', plot_flag=True)
     dataset_characterization.generate_runtime_distribution_plot_per_dataset(dataset_name = 'cdyear2', plot_flag=True)
