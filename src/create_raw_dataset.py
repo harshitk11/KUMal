@@ -585,20 +585,14 @@ def get_dataloader(args, partition, labels, custom_collate_fn, required_partitio
 class dataset_split_generator:
     
     """
-    Generates the dataset splits for all the classification tasks: DVFS individual, DVFS Fusion, HPC individual, and HPC-DVFS Fusion.
+    Generates the dataset splits for the classification tasks.
 
-    - Given a dataset, we have to handle the split [num_train_%, num_trainSG_%, num_test_%] according to the following cases:
+    - Given a dataset, we have to handle the split [num_train_%, num_test_%] according to the following cases:
  
-        1. If the dataset is used for training the models (i.e. std-dataset), then we create splits for training the base-classifier (num_train_% = 70%)
-            and for training the second-stage model (num_trainSG_% = 30%). In this case, there is no test split. 
-            Having no test split prevents temporal bias (TESSERACT), i.e., we don't have test samples that have timestamp earlier than the training samples. 
- 
+        1. If the dataset is used for training the models (i.e. std-dataset), then we create splits for training the classifier (num_train_% = 70%)
+            and for testing the classifier (num_test_% = 30%). 
+            
         2. If the dataset is used for testing the models (i.e., cd-year1-dataset etc.), then we use the entire dataset for testing the models (num_test_% = 100%) and there is no training split.
- 
-        3. For the bench-dataset, we are not performing MLP fusion so we don't need a split for training the second stage model (i.e. num_trainSG_% = 0%).
-            Since the objective of the bench-dataset is to establish the non-determinism in the GLOBL channels, i.e., we only want to show that the performance of HPC is more than DVFS for benchmarks. 
-            we don't care about temporal bias, so we can use test data from the same dataset.
-            In this case, we have standard Train and Test split (num_train_% = 70%, num_test_% = 30%)
  
     """
     
@@ -606,11 +600,10 @@ class dataset_split_generator:
         """
         params:
             - seed : Used for shuffling the file list before generating the splits
-            - partition_dist = [num_train_%, num_trainSG_%, num_test_%]
-                                - num_train_% : percentage training samples for the base-classifiers
-                                - num_val_% : percentage training samples for the second stage model (in case of stacked generalization)
+            - partition_dist = [num_train_%, num_test_%]
+                                - num_train_% : percentage training samples
                                 - num_test_% : percentage test samples
-            - dataset_type : Can take one of the following values {'std-dataset', 'cd-dataset', 'bench-dataset'}
+            - datasplit_dataset_type : Can take one of the following values {'std-dataset', 'cd-dataset'}
         """
         self.seed = seed
         self.partition_dist = partition_dist
@@ -618,27 +611,20 @@ class dataset_split_generator:
 
 
     @staticmethod
-    def create_file_dict(file_list, file_type):
+    def create_file_dict(file_list):
         """
         Creates a dict from the file list with key = file_hash and value = [((it0,rn0), index_in_file),((it1,rn0), index_in_file),..] 
         i.e., list of tuples containing the rn and iter values associated with the hash 
 
         Input : 
             - file_list : List of file paths
-            - file_type : DVFS or HPC (Different parsers for different file types)    
-        
+            
         Output : 
             -hash_dict :  key = file_hash and value = [((it0,rn0), index_in_file),((it1,rn0), index_in_file),..] 
         """
-        # Determine the parser on the basis of file_type
-        regex_pattern = None
-        if file_type == 'simpleperf':
-            regex_pattern = r'.*\/(.*)__.*it(\d*)_rn(\d*).txt'
-        elif file_type == 'dvfs':
-            regex_pattern = r'.*\/(.*)__.*iter_(\d*)_rn(\d*).txt'
-        else:
-            raise ValueError("Incorrect file type provided.")
-
+        # Regex pattern to parse out the hash, iteration, run number from the file name
+        regex_pattern = r'.*\/(.*)__.*it(\d*)_rn(\d*).txt'
+        
         # Stores the output of this module
         hash_dict = {}
 
@@ -667,114 +653,7 @@ class dataset_split_generator:
         #############################################################################################################################
         
         return hash_dict
-
-    @staticmethod
-    def get_hpc_dvfs_file_list(hpc_path, dvfs_path):
-        """
-        Function to extract the corresponding dvfs files [if it exists] for the HPC logs. (In principle every HPC log should have a corresponding DVFS log)
-
-        Input :
-            - hpc_path : Path of the folder containing the HPC logs
-            - dvfs_path : Path of the folder containing the DVFS logs
-
-        Output : 
-            - (matched_hpc_files, matched_dvfs_files)
-                - matched_hpc_files : List of HPC file paths whose corresponding DVFS files have been found
-                - matched_dvfs_files : Corresponding DVFS file paths for the HPC file (NOTE : Order is same as HPC files)
-            
-        """
-        # Create a list of files that are present in each of the folders
-        hpc_file_list = [join(hpc_path,f) for f in listdir(hpc_path) if isfile(join(hpc_path,f))]
-        dvfs_file_list = [join(dvfs_path,f) for f in listdir(dvfs_path) if isfile(join(dvfs_path,f))]
-
-        # Create the dict from the corresponding file lists
-        hpc_dict = dataset_split_generator.create_file_dict(hpc_file_list, "simpleperf")
-        dvfs_dict = dataset_split_generator.create_file_dict(dvfs_file_list, "dvfs")
-
-        # Iterate through the hpc_dict and check if you have a corresponding file in dvfs_dict
-        # If yes, then add the corresponding file paths to matched_hpc_files and matched_dvfs_files
-        # Pick the first folder_dict and see which hashes are common with all the other folder_dicts
-        matched_hpc_files = []
-        matched_dvfs_files = []
-        
-        for hash_val, occurences in hpc_dict.items():
-            
-            if hash_val in dvfs_dict:
-                # Found hash. Now check if there are common files for the two hashes.
-                # Get a list of iter_and_rn tuples for this hash in dvfs dict
-                iter_and_rn_dvfs_list = [ele[0] for ele in dvfs_dict[hash_val]]
-                
-                ## iter_and_rn_and_index[0] = (iter, rn) | iter_and_rn_and_index[1] = index
-                for iter_and_rn_and_index in occurences: # For each iter_and_rn tuple in hpc for this hash, check if there is corresponding iter and hash in dvfs
-                    if iter_and_rn_and_index[0] in iter_and_rn_dvfs_list:
-                        # Found match for iter and rn. Append the corresponding file paths to their corresponding lists using the index 
-                        matched_hpc_files.append(hpc_file_list[iter_and_rn_and_index[1]])
-                        matched_dvfs_files.append(dvfs_file_list[dvfs_dict[hash_val][iter_and_rn_dvfs_list.index(iter_and_rn_and_index[0])][1]])
-
-        ################################################# Unit test for this module #################################################
-        # # Sanity check : Length of the matched list should be same
-        # print("----------------------------------------------- TESTING MATCHED FILE MODULE --------------------------------------------------")    
-        # print(f"Length : matched_dvfs_files = {len(matched_dvfs_files)} |  matched_hpc_files = {len(matched_hpc_files)} | Equal = {len(matched_hpc_files) == len(matched_dvfs_files)}")
-        #############################################################################################################################
-        return (matched_hpc_files, matched_dvfs_files)            
-
-    @staticmethod
-    def create_matched_lists(base_location):
-        """
-        Function to create matched_lists for dvfs and simpleperf rn files. For each rn folder, identify the matched files in the dvfs folder and return a list of the matched
-        files for both the rn folder and the dvfs folder.
-
-        Directory structure assumed : 
-            ---base_location/
-                |
-                ----benign/
-                    |
-                    ----dvfs/
-                    ----simpleperf/
-                        |
-                        ----rn1/    
-                        ----rn2/
-                        ----rn3/
-                        ----rn4/
-                ----malware/
-                    |
-                    ----dvfs/
-                    ----simpleperf/
-                        |
-                        ----rn1/    
-                        ----rn2/
-                        ----rn3/
-                        ----rn4/
-        Input : 
-            - base_location : Location of the base folder. See the directory structure assumed.
-        Output :
-            - matched_lists_benign : [(matched_hpc_rn1_files, matched_dvfs_rn1_files), (...rn2...), (...rn3...), (...rn4...)]
-            - matched_lists_malware : [(matched_hpc_rn1_files, matched_dvfs_rn1_files), (...rn2...), (...rn3...), (...rn4...)]
-        """
-        dvfs_benign_loc = os.path.join(base_location, "benign","dvfs")
-        dvfs_malware_loc = os.path.join(base_location, "malware","dvfs")
-        simpleperf_benign_rn_loc = [os.path.join(base_location, "benign","simpleperf",rn) for rn in ['rn1','rn2','rn3','rn4']]
-        simpleperf_malware_rn_loc = [os.path.join(base_location, "malware","simpleperf",rn) for rn in ['rn1','rn2','rn3','rn4']]
-
-        # Create matched lists for benign
-        matched_lists_benign = []
-        for benign_perf_loc in simpleperf_benign_rn_loc:
-            # print(f"********************************************** Generating matched list : {benign_perf_loc} : **********************************************")
-            matched_lists_benign.append(dataset_split_generator.get_hpc_dvfs_file_list(hpc_path = benign_perf_loc, dvfs_path = dvfs_benign_loc))
-
-        # Create matched lists for malware
-        matched_lists_malware = []    
-        for malware_perf_loc in simpleperf_malware_rn_loc:
-            # print(f"********************************************** Generating matched list : {malware_perf_loc} : **********************************************")
-            matched_lists_malware.append(dataset_split_generator.get_hpc_dvfs_file_list(hpc_path = malware_perf_loc, dvfs_path = dvfs_malware_loc))
-
-        ################################################# Unit test for this module #################################################         
-        # # Testing the one to one correspondence between the matched hpc and dvfs files
-        # for i,j in matched_lists_benign:
-        #     for x,y in zip(i,j):
-        #         print(f" - {x} ====== {y}\n")
-        #############################################################################################################################
-        return matched_lists_benign, matched_lists_malware
+           
 
     @staticmethod
     def create_labels_from_filepaths(benign_filepaths = None, malware_filepaths = None):
@@ -805,6 +684,7 @@ class dataset_split_generator:
 
         return benign_label, malware_label
 
+# TODO: Ensure that the splits that are created ensure that the same hash is not present in both train and test splits
     
     def create_splits(self, benign_label=None, malware_label=None):
         '''
@@ -890,13 +770,8 @@ class dataset_split_generator:
 
     def create_all_datasets(self, base_location):
         """
-        Function to create splits: Train, Val, Test for all the tasks:
-                                    - Individual DVFS
-                                    - Fused DVFS
-                                    - Individual HPC
-                                    - HPC_DVFS fused (DVFS part)
-                                    - HPC_DVFS fused (HPC part)
-
+        Function to create Train and Test splits for classification for the std and cd datasets.
+        
         params: 
             - base_location : Location of the base folder. See the directory structure in create_matched_lists()
         Output:
@@ -1641,18 +1516,12 @@ class dataset_generator_downloader:
         
         
         # 2. Download the shortlisted files at <root_dir>/data/<dataset_type> 
-                
-        # Downloading the shortlisted dvfs files [Needs to be executed only once to download the files]
-        malware_dvfs_path =  self.download_shortlisted_files(shortlisted_files_malware, file_type= 'dvfs', app_type= 'malware', num_download_threads=num_download_threads, download_flag=download_file_flag)
-        benign_dvfs_path =  self.download_shortlisted_files(shortlisted_files_benign, file_type= 'dvfs', app_type= 'benign', num_download_threads=num_download_threads, download_flag=download_file_flag)
         
         # Downloading the shortlisted performance counter files [Needs to be executed only once to download the files]
         malware_simpeperf_path =  self.download_shortlisted_files(shortlisted_files_malware, file_type= 'simpleperf', app_type= 'malware', num_download_threads=num_download_threads, download_flag=download_file_flag)
         benign_simpleperf_path =  self.download_shortlisted_files(shortlisted_files_benign, file_type= 'simpleperf', app_type= 'benign', num_download_threads=num_download_threads, download_flag=download_file_flag)
 
-        candidateLocalPathDict = {"malware_dvfs_path": malware_dvfs_path,
-                                "benign_dvfs_path": benign_dvfs_path,
-                                "malware_simpeperf_path": malware_simpeperf_path,
+        candidateLocalPathDict = {"malware_simpeperf_path": malware_simpeperf_path,
                                 "benign_simpleperf_path": benign_simpleperf_path}
 
         return shortlisted_files_benign,shortlisted_files_malware, candidateLocalPathDict
@@ -1695,7 +1564,7 @@ def generate_apk_list_for_software_AV_comparison(dataset_name, saveHashList_flag
 
 def main():
     # # STD-Dataset
-    # dataset_generator_instance = dataset_generator_downloader(filter_values= [0,50,2], dataset_type="std-dataset", base_download_dir="/hdd_6tb/hkumar64/arm-telemetry/usenix_winter_dataset")
+    dataset_generator_instance = dataset_generator_downloader(filter_values= [0,50,2], dataset_type="std-dataset", base_download_dir="/hdd_6tb/hkumar64/arm-telemetry/usenix_winter_dataset")
     # # CD-Dataset
     # dataset_generator_instance = dataset_generator_downloader(filter_values= [0,0,0], dataset_type="std-dataset", base_download_dir="/hdd_6tb/hkumar64/arm-telemetry/usenix_winter_dataset")
     # # Bench-Dataset
@@ -1707,12 +1576,12 @@ def main():
     # exit()
 
 
-    # # ######################### Testing the datasplit generator #########################
-    # test_path = "/hdd_6tb/hkumar64/arm-telemetry/usenix_winter_dataset/std-dataset"          
-    # x = dataset_split_generator(seed=10, partition_dist=[0.7,0.3,0], datasplit_dataset_type="std-dataset")        
-    # x.create_all_datasets(base_location=test_path)
-    # exit()
-    # # ###################################################################################
+    # ######################### Testing the datasplit generator #########################
+    test_path = "/hdd_6tb/hkumar64/arm-telemetry/usenix_winter_dataset/std-dataset"          
+    x = dataset_split_generator(seed=10, partition_dist=[0.7,0.3,0], datasplit_dataset_type="std-dataset")        
+    x.create_all_datasets(base_location=test_path)
+    exit()
+    # ###################################################################################
     
     ######################### Generating hash list for software AV comparison #########################
     saveHashList_flag = True
