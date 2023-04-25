@@ -464,12 +464,16 @@ class malware_label_generator:
                         else:
                             distribution_logbook[dataset_]["FAM"][fam_] = 1
         
+        # Add any missing keys to the dictionary with a value of 0 
+        all_keys_class = []
+        all_keys_fam = []
+        for dataset, dist in distribution_logbook.items():
+            all_keys_class += list(dist['CLASS'].keys())
+            all_keys_fam += list(dist['FAM'].keys())
+        all_keys_class = list(set(all_keys_class))
+        all_keys_fam = list(set(all_keys_fam))
         # Iterate over all datasets in the distribution_logbook dictionary
-        for dataset in distribution_logbook:
-            # Get a list of all unique keys across all the CLASS and FAM dictionaries
-            all_keys_class = list(distribution_logbook[dataset]['CLASS'].keys())
-            all_keys_fam = list(distribution_logbook[dataset]['FAM'].keys())
-            
+        for dataset in distribution_logbook:    
             # Iterate over all keys and add any missing keys to the dictionary with a value of 0
             for key in all_keys_class:
                 if key not in distribution_logbook[dataset]['CLASS']:
@@ -485,13 +489,25 @@ class malware_label_generator:
             sorted_class = {k: v for k, v in sorted(dist['CLASS'].items(), key=lambda item: item[1], reverse=True)}
             sorted_logbook[dataset] = {"CLASS": sorted_class, "FAM": sorted_fam}
 
-
+        malware_apk_per_dataset = {"std": 970, "cdyear1": 489, "cdyear2": 451, "cdyear3": 450}
+        # Normalize the distribution based on the number of malware apks in each dataset
+        for dataset, dist in sorted_logbook.items():
+            for key, value in dist['CLASS'].items():
+                sorted_logbook[dataset]['CLASS'][key] = int((value / malware_apk_per_dataset[dataset])*100)
+            for key, value in dist['FAM'].items():
+                sorted_logbook[dataset]['FAM'][key] = int((value / malware_apk_per_dataset[dataset])*100)
+                
         # Pretty print the distribution_logbook
         for dataset_, hash_info in sorted_logbook.items():
             print(f"Dataset: {dataset_}")
             for key_, value_ in hash_info.items():
                 print(f"{key_}: {value_}")
-            print("-----------------")
+            print("---------------------------------------------------")
+        
+        # Save the sorted_logbook as a json file (NOTE: individual values are normalized)
+        with open(os.path.join(avreport_base_directory, "malware_characterization.json"), 'w') as file:
+            json.dump(sorted_logbook, file, indent=4)
+            
             
                     
 def benign_malware_characterization_table_generator(xmd_base_folder):
