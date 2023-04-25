@@ -387,18 +387,20 @@ class analyse_parser_info_dict:
         d = {'runtime':runtime_per_file, 'apk type':app_type_per_file}
         df = pd.DataFrame(data=d)
 
-        # calculate percentiles for each group of 'apk type'
-        percentiles = df.groupby('apk type')['runtime'].quantile([0.25, 0.5, 0.75])
-        print(f"percentiles for {dataset_name} : {percentiles}")
+        # # calculate percentiles for each group of 'apk type'
+        # percentiles = df.groupby('apk type')['runtime'].quantile([0.25, 0.5, 0.75])
+        # print(f"percentiles for {dataset_name} : {percentiles}")
 
         plt.plot()
         palette = ['#5cd65c','#ff5050']
-        sns.set_style("whitegrid")
-        ax = sns.histplot(data = df, x='runtime', hue='apk type', binwidth=2, multiple='dodge', shrink=0.8, palette=palette)
+        sns.set(font_scale=1.1)
+        sns.set_style("whitegrid",  {"grid.linestyle": "--"})
+        ax = sns.histplot(data = df, x='runtime', hue='apk type', binwidth=5, multiple='dodge', shrink=0.8, palette=palette, legend=True)
         plt.xlabel('Runtime (in s)', weight = 'bold')
         plt.ylabel('# of data-collection runs', weight='bold')
+        # ax.legend(loc='upper center', ncol =2)
         plt.setp(ax.get_legend().get_title(), weight='bold') # for legend title
-        plt.title(f"Runtime distribution for apks in {dataset_name}")
+        # plt.title(f"Runtime distribution for apks in {dataset_name}")
         plt.tight_layout()
         plt.savefig(save_location)
         plt.close('all')
@@ -462,7 +464,7 @@ class analyse_parser_info_dict:
             self.plot_runtime_distribution(runtime_per_file=runtime_per_file,
                                             app_type_per_file=app_type_per_file,
                                             dataset_name='all',
-                                            save_location=os.path.join(self.output_dir_plots,f"runtime_distribution_malware_benign_all_dataset.png"))
+                                            save_location=os.path.join(self.output_dir_plots,f"runtime_distribution_malware_benign_all_dataset.pdf"))
     ########################################################################################################################
 
 #######################################################################################################################################################

@@ -14,6 +14,7 @@ import statistics
 from virus_total_apis import PublicApi as VirusTotalPublicApi
 import time
 import os
+import pickle
 
 
 class Config:
@@ -335,22 +336,30 @@ class malware_label_generator:
 
 
     @staticmethod
-    def read_vt_and_convert_to_avclass_format(infile, outfile):
+    def read_vt_and_convert_to_avclass_format(infile, outfile, filter_hash_list = None):
         """
-        Reads the vt report and converts it into a format that Euphony can process.
-        Euphony reades a sequence of reports from VirusTotal formatted as JSON records (one per line)
+        Reads the vt report and converts it into a format that AVClass can process.
+        AVClass reades a sequence of reports from VirusTotal formatted as JSON records (one per line)
 
         params:
             - infile: Path of the vt report that should be converted to the simplified JSON format used by AVClass2 
             - outfile: Path of the output file
+            - filter_hash_list: Contains list of hashes that needs to be considered for the conversion to AVClass format
         """
         with open(infile,"rb") as f:
             vt_rep = json.load(f)
 
         # simplified json format used by avclass {md5, sha1, sha256, av_labels}
         avclass_list = []
-        for _,vt_report in vt_rep.items():
-
+        
+        for apkHash in filter_hash_list:
+            print(f"Processing hash {apkHash}")
+            try:
+                vt_report = vt_rep[apkHash]
+            except:
+                print(f"Hash {apkHash} not found in the vt report")
+                continue
+            
             # Generate av labels for each antivirus
             avclass_avlabel_entry = []
             for av, avReport in vt_report["results"]["scans"].items():
@@ -365,12 +374,191 @@ class malware_label_generator:
                 avclass_entry["sha256"] = vt_report["results"]["sha256"]
                 avclass_entry["av_labels"] = avclass_avlabel_entry
                 avclass_list.append(avclass_entry)
-        
+    
         # Output the list into a file with one report per line
         with open(outfile,'w') as f:
             f.write("\n".join(map(str,avclass_list)).replace("'",'"'))
+            
+    @staticmethod
+    def extract_family_class_from_line(avreport_line):
+        """
+        Extracts the family and class information from the avclass line.
+        params:
+            - avreport_line: Line from the avclass report
+        Output:
+            - result_dict: Dict with key=hash and value= list of classes/families associated with the hash
+        """ 
+        result = None
+        print(avreport_line)
+        # use regex to extract hash, classes, and families
+        pattern = re.compile(r'(?P<hash>\w+)\t\d+\t(?P<info>.+)')
+        match = pattern.match(avreport_line)
+        if match:
+            hash_val = match.group('hash')
+            info = match.group('info')
+
+            # use regex to extract class and family information
+            class_pattern = re.compile(r'CLASS:(?P<class>\w+)(:\w+)*')
+            classes = class_pattern.findall(info)
+
+            fam_pattern = re.compile(r'FAM:(?P<family>\w+)\|(?P<freq>\d+)')
+            families = fam_pattern.findall(info)
+
+            # create dictionary with extracted information
+            output_dict = {'CLASS': [], 'FAM': []}
+            for class_item in classes:
+                if class_item[1] != '' and (class_item[1].lstrip(':') not in output_dict['CLASS']):
+                    output_dict['CLASS'].append(class_item[1].lstrip(':'))
+                if class_item[0] not in output_dict['CLASS']:
+                    output_dict['CLASS'].append(class_item[0])
                 
+            for fam_item in families:
+                output_dict['FAM'].append(fam_item[0])
+
+            result = {hash_val: output_dict}
+        print(result)
+        print("-----------------")
+        return result
+    
+    @staticmethod
+    def get_family_class_from_AVClass_report(avreport_base_directory):
+        """
+        Reads the AVClass report and outputs the family and class distribution. 
+        Assumes that the avcalss report is already generated (using benign_malware_characterization_table_generator()).
+        """
+        dataset_names = ["std", "cdyear1", "cdyear2", "cdyear3"]
+        parsed_avclass_report_dataset = {}
         
+        # Parse the AVClass report for each dataset and track the class and family for each hash
+        for dataset_ in dataset_names:
+            parsed_avclass_report = {}
+            
+            # Read the AVClass report and store each line in a list
+            with open(os.path.join(avreport_base_directory, f'avclass_report_{dataset_}.txt'), 'r') as file:
+                avclass_hashLines = file.readlines()
+            
+            
+            for indx, avclass_line in enumerate(avclass_hashLines):
+                parsed_info = malware_label_generator.extract_family_class_from_line(avclass_line)
+                if parsed_info is not None:
+                    parsed_avclass_report.update(parsed_info)
+        
+            parsed_avclass_report_dataset[dataset_] = parsed_avclass_report
+        
+        # Logbook to maintain the family and class distribution for each dataset
+        distribution_logbook = {}    
+        # Generate the family and class distribution for each dataset
+        for dataset_, parsed_avclass_report_ in parsed_avclass_report_dataset.items():
+            distribution_logbook[dataset_] = {"CLASS": {}, "FAM": {}}
+            for hash_, hash_info in parsed_avclass_report_.items():
+                if hash_info["CLASS"]:
+                    for class_ in hash_info["CLASS"]:
+                        if class_ in distribution_logbook[dataset_]["CLASS"]:
+                            distribution_logbook[dataset_]["CLASS"][class_] += 1
+                        else:
+                            distribution_logbook[dataset_]["CLASS"][class_] = 1
+                if hash_info["FAM"]:
+                    for fam_ in hash_info["FAM"]:
+                        if fam_ in distribution_logbook[dataset_]["FAM"]:
+                            distribution_logbook[dataset_]["FAM"][fam_] += 1
+                        else:
+                            distribution_logbook[dataset_]["FAM"][fam_] = 1
+        
+        # Iterate over all datasets in the distribution_logbook dictionary
+        for dataset in distribution_logbook:
+            # Get a list of all unique keys across all the CLASS and FAM dictionaries
+            all_keys_class = list(distribution_logbook[dataset]['CLASS'].keys())
+            all_keys_fam = list(distribution_logbook[dataset]['FAM'].keys())
+            
+            # Iterate over all keys and add any missing keys to the dictionary with a value of 0
+            for key in all_keys_class:
+                if key not in distribution_logbook[dataset]['CLASS']:
+                    distribution_logbook[dataset]['CLASS'][key] = 0
+            for key in all_keys_fam:
+                if key not in distribution_logbook[dataset]['FAM']:
+                    distribution_logbook[dataset]['FAM'][key] = 0
+
+        # Sort the logbook based on the frequency of the class and family        
+        sorted_logbook = {}
+        for dataset, dist in distribution_logbook.items():
+            sorted_fam = {k: v for k, v in sorted(dist['FAM'].items(), key=lambda item: item[1], reverse=True)}
+            sorted_class = {k: v for k, v in sorted(dist['CLASS'].items(), key=lambda item: item[1], reverse=True)}
+            sorted_logbook[dataset] = {"CLASS": sorted_class, "FAM": sorted_fam}
+
+
+        # Pretty print the distribution_logbook
+        for dataset_, hash_info in sorted_logbook.items():
+            print(f"Dataset: {dataset_}")
+            for key_, value_ in hash_info.items():
+                print(f"{key_}: {value_}")
+            print("-----------------")
+            
+                    
+def benign_malware_characterization_table_generator(xmd_base_folder):
+    """
+    Generates the table for benign and malware characterization
+    params:
+        - xmd_base_folder: Base folder of xmd
+    """
+    output_folder_dataset_characterization = os.path.join(xmd_base_folder, "res", "dataset_characterization")
+    if not os.path.exists(output_folder_dataset_characterization):
+        os.makedirs(output_folder_dataset_characterization)
+
+    final_dataset_benignApp_category_info = {} 
+    dataset_names = ["std", "cdyear1", "cdyear2", "cdyear3"]
+    
+    # Get the hashlist of benign and malware for the final dataset. List is generated by generate_apk_list_for_software_AV_comparison() in create_raw_dataset.py.
+    for dataset in dataset_names:
+        final_dataset_benignApp_category_info[dataset] = {}
+
+        # for apk_type in ["benign","malware"]:
+        for apk_type in ["malware"]:
+            print(f"Processing {dataset} {apk_type}...")
+            final_dataset_benignApp_category_info[dataset][apk_type] = {}
+
+            # Load a pikle file containing the hashlist of benign and malware
+            hashlist_path = os.path.join(xmd_base_folder, "res", "APK_hashList_final_dataset_no_filter", f"{dataset}-dataset_{apk_type}HashList.pkl")
+            with open(hashlist_path, "rb") as f:
+                hashlist = pickle.load(f)
+
+            if apk_type == "benign":
+                # Read the app info json file containing app info for each benign apk
+                with open("/data/hkumar64/projects/arm-telemetry/xmd/baremetal_data_collection_framework/androzoo/top_app_androzoo_info.json", "rb") as f:
+                    app_info = json.load(f)
+                
+                # Get the category for each benign apk and update the final_dataset_benignApp_category_info dict
+                for benignHash in hashlist:
+                    app_category = app_info[benignHash]["category"]
+                    if app_category in final_dataset_benignApp_category_info[dataset][apk_type]:
+                        final_dataset_benignApp_category_info[dataset][apk_type][app_category] += 1
+                    else:
+                        final_dataset_benignApp_category_info[dataset][apk_type][app_category] = 1
+
+            elif apk_type == "malware":
+                # Generate the modified virus total report for each dataset which will be fed to AVClass
+                malware_label_generator.read_vt_and_convert_to_avclass_format(infile="/data/hkumar64/projects/arm-telemetry/KUMal/res/virustotal/hash_VT_report_all_malware_vt10.json", 
+                                                                            outfile=os.path.join(output_folder_dataset_characterization, f"{dataset}_{apk_type}_avclass.vt"), 
+                                                                            filter_hash_list = hashlist)
+    # Sort final_dataset_benignApp_category_info dict based on the app category
+    # Extract the categories from the dictionary
+    categories = set()
+    for dataset in final_dataset_benignApp_category_info.values():
+        categories |= set(dataset['benign'].keys())
+    # Sort the categories alphabetically
+    sorted_categories = sorted(categories)
+    # Create a new dictionary with sorted categories
+    sorted_dataset = {}
+    for key, dataset in final_dataset_benignApp_category_info.items():
+        sorted_dataset[key] = {
+            'benign': {cat: dataset['benign'].get(cat, 0) for cat in sorted_categories},
+            'malware': dataset['malware']
+        }
+
+    # Save the final_dataset_benignApp_category_info dict as a json file
+    with open(os.path.join(output_folder_dataset_characterization, "final_dataset_benignApp_category_info.json"), "w") as f:
+        json.dump(sorted_dataset, f, indent=4)
+            
+    
 def main():
     # Current directory [where the script is executing from]
     cur_path = os.path.dirname(os.path.realpath(__file__))
@@ -384,9 +572,13 @@ def main():
     # Path where the final vt report will be saved
     vtReportSavePath = os.path.join(xmd_base_folder,"res","virustotal","hash_VT_report_all_malware_vt10.json")
 
-    # Generate the VT report
-    eParse = malware_label_generator()
-    eParse.generate_vt_report_all_malware(metaInfoPath = metaInfoPath, outputReportPath = vtReportSavePath)
+    # # Generate the VT report
+    # eParse = malware_label_generator()
+    # eParse.generate_vt_report_all_malware(metaInfoPath = metaInfoPath, outputReportPath = vtReportSavePath)
+    
+    # # Generate the benign and malware characterization table
+    # benign_malware_characterization_table_generator(xmd_base_folder)
+    malware_label_generator.get_family_class_from_AVClass_report(avreport_base_directory="/data/hkumar64/projects/arm-telemetry/KUMal/res/dataset_characterization/avclass_reports")
     exit()
     # Get the detection distribution
     eParse.generate_vt_detection_distribution(VTReportPath="/data/hkumar64/projects/arm-telemetry/xmd/res/virustotal/hash_VT_report_all_malware.json")

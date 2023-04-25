@@ -1228,7 +1228,6 @@ class dataset_generator_downloader:
         self.base_download_dir = base_download_dir
         self.dataset_type = dataset_type
         ############################### Generating black list for malware apks for all the datasets #################################
-        # vt_malware_report_path = os.path.join(self.root_dir_path, "res", "virustotal", "hash_virustotal_report_malware")
         vt_malware_report_path = os.path.join(self.root_dir_path, "res", "virustotal", "hash_VT_report_all_malware_vt10.json")
         
         # If the black list already exists, then it will load the previous black list. To generate the new blacklist, delete
@@ -1249,7 +1248,7 @@ class dataset_generator_downloader:
             - not_malware : List of hashes of apks with 0 or 1 vt positive
         """
         # Location where the not_malware list is stored
-        not_malware_list_loc = os.path.join(self.root_dir_path,"res","virustotal","not_malware_hashlist")
+        not_malware_list_loc = os.path.join(self.root_dir_path,"res","virustotal",f"not_malware_hashlist_vtthreshold_{vtThreshold}.pkl")
 
         # Check if the not_malware_hashlist is already created. If yes, then return the previous list
         if os.path.isfile(not_malware_list_loc):
@@ -1559,90 +1558,6 @@ class dataset_generator_downloader:
 
         return len(hashlist_benign), len(hashlist_malware)
 
-    def generate_dataset(self, download_file_flag, num_download_threads=0):
-        """
-        Generates the dataset (benign,malware) based on the dataset_type and filter_values
-        params:
-            - download_file_flag : If True, then will download all the shortlisted files
-            - num_download_threads : Number of simultaneous download threads. Only needed when download_file_flag is True.
-            
-
-        Output:
-            - Generated dataset at the specified location
-            - shortlisted_files_benign, shortlisted_files_malware (Corresponding dvfs and simpleperf files will be downloaded
-                if download_file_flag is True.)
-            - candidateLocalPathDict : Local locations of the files that should be downloaded
-        """
-        # 1. Create shortlisted files based on the logcat filter and dataset type
-        if self.dataset_type == "std-dataset":
-            # Get the location of the parser info files
-            parser_info_benign = os.path.join(self.root_dir_path, "res/parser_info_files", f"parser_info_std_benign.json")
-            parser_info_malware = os.path.join(self.root_dir_path, "res/parser_info_files", f"parser_info_std_malware.json")
-
-            # Create shortlisted files for benign and malware
-            shortlisted_files_benign, _ = self.create_shortlisted_files(parser_info_loc=parser_info_benign, apply_filter=True)
-            shortlisted_files_malware, _ = self.create_shortlisted_files(parser_info_loc=parser_info_malware, apply_filter=True)
-
-            # Filter out the blacklisted files from the malware file list
-            shortlisted_files_malware = self.filter_shortlisted_files(shortlisted_files_malware)
-
-            
-        elif self.dataset_type == "cd-dataset":
-            # Get the location of the parser info files
-            parser_info_benign = os.path.join(self.root_dir_path, "res/parser_info_files", f"parser_info_cd_benign.json")
-            parser_info_malware = os.path.join(self.root_dir_path, "res/parser_info_files", f"parser_info_cd_malware.json")
-
-            # Create shortlisted files for benign and malware
-            shortlisted_files_benign, _ = self.create_shortlisted_files(parser_info_loc=parser_info_benign, apply_filter=True)
-            shortlisted_files_malware, _ = self.create_shortlisted_files(parser_info_loc=parser_info_malware, apply_filter=True)
-
-        elif self.dataset_type == "bench-dataset":
-            # Get the location of the parser info files
-            # Benchmark files are distributed over three different locations
-            parser_info_benign1 = os.path.join(self.root_dir_path, "res/parser_info_files", f"parser_info_bench1.json")
-            parser_info_benign2 = os.path.join(self.root_dir_path, "res/parser_info_files", f"parser_info_bench2.json")
-            parser_info_benign3 = os.path.join(self.root_dir_path, "res/parser_info_files", f"parser_info_bench3.json")
-            parser_info_malware = os.path.join(self.root_dir_path, "res/parser_info_files", f"parser_info_std_malware.json")
-
-            # Create shortlisted files for benign and malware
-            shortlisted_files_benign1, _ = self.create_shortlisted_files(parser_info_loc=parser_info_benign1, apply_filter=False)
-            shortlisted_files_benign2, _ = self.create_shortlisted_files(parser_info_loc=parser_info_benign2, apply_filter=False)
-            shortlisted_files_benign3, _ = self.create_shortlisted_files(parser_info_loc=parser_info_benign3, apply_filter=False)
-            shortlisted_files_malware, _ = self.create_shortlisted_files(parser_info_loc=parser_info_malware, apply_filter=True)
-
-            # Merge all the benchmark files to get one single list
-            shortlisted_files_benign = shortlisted_files_benign1+shortlisted_files_benign2+shortlisted_files_benign3
-
-            # Filter out the blacklisted files from the malware file list
-            shortlisted_files_malware = self.filter_shortlisted_files(shortlisted_files_malware)
-
-            
-        else:
-            raise(ValueError("Incorrect dataset type specified"))
-
-        #################### Dataset Info ####################
-        print(f"Information for the dataset : {self.dataset_type}")
-        print(f"- Number of benign files : {len(shortlisted_files_benign)}")
-        print(f"- Number of malware files : {len(shortlisted_files_malware)}")
-        ###################################################### 
-        
-        
-        # 2. Download the shortlisted files at <root_dir>/data/<dataset_type> 
-                
-        # Downloading the shortlisted dvfs files [Needs to be executed only once to download the files]
-        malware_dvfs_path =  self.download_shortlisted_files(shortlisted_files_malware, file_type= 'dvfs', app_type= 'malware', num_download_threads=num_download_threads, download_flag=download_file_flag)
-        benign_dvfs_path =  self.download_shortlisted_files(shortlisted_files_benign, file_type= 'dvfs', app_type= 'benign', num_download_threads=num_download_threads, download_flag=download_file_flag)
-        
-        # Downloading the shortlisted performance counter files [Needs to be executed only once to download the files]
-        malware_simpeperf_path =  self.download_shortlisted_files(shortlisted_files_malware, file_type= 'simpleperf', app_type= 'malware', num_download_threads=num_download_threads, download_flag=download_file_flag)
-        benign_simpleperf_path =  self.download_shortlisted_files(shortlisted_files_benign, file_type= 'simpleperf', app_type= 'benign', num_download_threads=num_download_threads, download_flag=download_file_flag)
-
-        candidateLocalPathDict = {"malware_dvfs_path": malware_dvfs_path,
-                                   "benign_dvfs_path": benign_dvfs_path,
-                                   "malware_simpeperf_path": malware_simpeperf_path,
-                                   "benign_simpleperf_path": benign_simpleperf_path}
-
-        return shortlisted_files_benign,shortlisted_files_malware, candidateLocalPathDict
 
     def generate_dataset_winter(self, download_file_flag, num_download_threads=0):
         """
@@ -1660,10 +1575,10 @@ class dataset_generator_downloader:
         # 1. Create shortlisted files based on the logcat filter and dataset type
         if self.dataset_type == "std-dataset":
             # Get the location of the parser info files
-            parser_info_benign1 = os.path.join(self.root_dir_path, "res/parser_info_files/winter", f"parser_info_std_benign.json")
-            parser_info_benign2 = os.path.join(self.root_dir_path, "res/parser_info_files/winter", f"parser_info_std_benign_dev2.json")
-            parser_info_malware1 = os.path.join(self.root_dir_path, "res/parser_info_files/winter", f"parser_info_std_malware.json")
-            parser_info_malware2 = os.path.join(self.root_dir_path, "res/parser_info_files/winter", f"parser_info_std_vt10_malware_dev2.json")
+            parser_info_benign1 = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_std_benign.json")
+            parser_info_benign2 = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_std_benign_dev2.json")
+            parser_info_malware1 = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_std_malware.json")
+            parser_info_malware2 = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_std_vt10_malware_dev2.json")
 
             # Create shortlisted files for benign and malware
             shortlisted_files_benign1, _ = self.create_shortlisted_files(parser_info_loc=parser_info_benign1, apply_filter=True)
@@ -1680,8 +1595,8 @@ class dataset_generator_downloader:
             
         elif self.dataset_type == "cdyear1-dataset":
             # Get the location of the parser info files
-            parser_info_benign = os.path.join(self.root_dir_path, "res/parser_info_files/winter", f"parser_info_cd_year1_benign.json")
-            parser_info_malware = os.path.join(self.root_dir_path, "res/parser_info_files/winter", f"parser_info_cd_year1_malware.json")
+            parser_info_benign = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_cd_year1_benign.json")
+            parser_info_malware = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_cd_year1_malware.json")
 
             # Create shortlisted files for benign and malware
             shortlisted_files_benign, _ = self.create_shortlisted_files(parser_info_loc=parser_info_benign, apply_filter=True)
@@ -1692,8 +1607,8 @@ class dataset_generator_downloader:
         
         elif self.dataset_type == "cdyear2-dataset":
             # Get the location of the parser info files
-            parser_info_benign = os.path.join(self.root_dir_path, "res/parser_info_files/winter", f"parser_info_cd_year2_benign.json")
-            parser_info_malware = os.path.join(self.root_dir_path, "res/parser_info_files/winter", f"parser_info_cd_year2_malware.json")
+            parser_info_benign = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_cd_year2_benign.json")
+            parser_info_malware = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_cd_year2_malware.json")
 
             # Create shortlisted files for benign and malware
             shortlisted_files_benign, _ = self.create_shortlisted_files(parser_info_loc=parser_info_benign, apply_filter=True)
@@ -1704,8 +1619,8 @@ class dataset_generator_downloader:
         
         elif self.dataset_type == "cdyear3-dataset":
             # Get the location of the parser info files
-            parser_info_benign = os.path.join(self.root_dir_path, "res/parser_info_files/winter", f"parser_info_cd_year3_benign.json")
-            parser_info_malware = os.path.join(self.root_dir_path, "res/parser_info_files/winter", f"parser_info_cd_year3_malware.json")
+            parser_info_benign = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_cd_year3_benign.json")
+            parser_info_malware = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_cd_year3_malware.json")
 
             # Create shortlisted files for benign and malware
             shortlisted_files_benign, _ = self.create_shortlisted_files(parser_info_loc=parser_info_benign, apply_filter=True)
@@ -1714,30 +1629,6 @@ class dataset_generator_downloader:
             # Filter out the blacklisted files from the malware file list
             shortlisted_files_malware = self.filter_shortlisted_files(shortlisted_files_malware)
         
-
-        elif self.dataset_type == "bench-dataset":
-            # Get the location of the parser info files
-            # Benchmark files are distributed over three different locations
-            parser_info_benign1 = os.path.join(self.root_dir_path, "res/parser_info_files/winter", f"parser_info_bench1.json")
-            parser_info_benign2 = os.path.join(self.root_dir_path, "res/parser_info_files/winter", f"parser_info_bench2.json")
-            parser_info_benign3 = os.path.join(self.root_dir_path, "res/parser_info_files/winter", f"parser_info_bench3.json")
-            parser_info_malware1 = os.path.join(self.root_dir_path, "res/parser_info_files/winter", f"parser_info_std_malware.json")
-            parser_info_malware2 = os.path.join(self.root_dir_path, "res/parser_info_files/winter", f"parser_info_std_vt10_malware_dev2.json")
-
-            # Create shortlisted files for benign and malware
-            shortlisted_files_benign1, _ = self.create_shortlisted_files(parser_info_loc=parser_info_benign1, apply_filter=False)
-            shortlisted_files_benign2, _ = self.create_shortlisted_files(parser_info_loc=parser_info_benign2, apply_filter=False)
-            shortlisted_files_benign3, _ = self.create_shortlisted_files(parser_info_loc=parser_info_benign3, apply_filter=False)
-            shortlisted_files_malware1, _ = self.create_shortlisted_files(parser_info_loc=parser_info_malware1, apply_filter=True)
-            shortlisted_files_malware2, _ = self.create_shortlisted_files(parser_info_loc=parser_info_malware2, apply_filter=True)
-
-            # Merge all the benchmark files to get one single list
-            shortlisted_files_benign = shortlisted_files_benign1+shortlisted_files_benign2+shortlisted_files_benign3
-            shortlisted_files_malware = shortlisted_files_malware1+shortlisted_files_malware2
-
-            # Filter out the blacklisted files from the malware file list
-            shortlisted_files_malware = self.filter_shortlisted_files(shortlisted_files_malware)
-
             
         else:
             raise(ValueError("Incorrect dataset type specified"))
@@ -1776,16 +1667,17 @@ def generate_apk_list_for_software_AV_comparison(dataset_name, saveHashList_flag
         - writes the hashlist_benign and hashlist_malware for the specified dataset in res/softwareAVcomparisonApkList
     """
     print(dataset_name)
-    dataset_generator_instance = dataset_generator_downloader(filter_values= [0,50,2], dataset_type=dataset_name, base_download_dir="/hdd_6tb/hkumar64/arm-telemetry/usenix_winter_dataset")
-    shortlisted_files_benign,shortlisted_files_malware, _ = dataset_generator_instance.generate_dataset_winter(download_file_flag=False, num_download_threads=30)
+    # dataset_generator_instance = dataset_generator_downloader(filter_values= [0,50,2], dataset_type=dataset_name, base_download_dir="/hdd_6tb/hkumar64/arm-telemetry/usenix_winter_dataset")
+    dataset_generator_instance = dataset_generator_downloader(filter_values= [0,0,0], dataset_type=dataset_name, base_download_dir="/hdd_6tb/hkumar64/arm-telemetry/usenix_winter_dataset")
+    shortlisted_files_benign,shortlisted_files_malware, _ = dataset_generator_instance.generate_dataset_winter(download_file_flag=False)
     hashlist_benign = dataset_generator_downloader.extract_hash_from_filename(shortlisted_files_benign)
     hashlist_malware = dataset_generator_downloader.extract_hash_from_filename(shortlisted_files_malware)
     num_benign, num_malware = dataset_generator_instance.count_number_of_apks() 
-    print(f" - Number of benign apk: {num_benign} | Number of malware apk: {num_malware}")
+    print(f" - Number of benign apk: {num_benign, len(hashlist_benign)} | Number of malware apk: {num_malware, len(hashlist_malware)}")
    
     if saveHashList_flag:
         root_dir_path = os.path.dirname(os.path.realpath(__file__)).replace("/src","")
-        baseLoc = os.path.join(root_dir_path, "res", "softwareAVcomparisonApkList")
+        baseLoc = os.path.join(root_dir_path, "res", "APK_hashList_final_dataset_no_filter")
         if not os.path.isdir(baseLoc):
             os.mkdir(baseLoc)
             
