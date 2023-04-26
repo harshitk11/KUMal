@@ -284,7 +284,7 @@ def get_dataloader(args, partition, labels, custom_collate_fn, required_partitio
         )
     
     if required_partitions["test"]:
-        ds_test_full = arm_telemetry_data(partition, labels, split='test', file_type= file_type, normalize=normalize_flag)
+        ds_test_full = arm_telemetry_data(partition, labels, split='test')
         testloader = torch.utils.data.DataLoader(
             ds_test_full,
             num_workers=args.num_workers,
@@ -423,7 +423,7 @@ class dataset_split_generator:
 
         return partition
 
-    def create_all_datasets(self, base_location):
+    def create_HPC_partitions_and_labels_for_all_rn(self, base_location):
         """
         Function to create Train and Test splits for classification for the std and cd datasets.
         
@@ -493,18 +493,18 @@ class dataset_split_generator:
             print(None)
         #######################################################################################################################
         
-        return HPC_partition_for_HPC_individual, HPC_partition_labels_for_HPC_individual
+        return [HPC_partition_for_HPC_individual, HPC_partition_labels_for_HPC_individual]
 
 
 class dataset_generator_downloader:
-    def __init__(self, filter_values, dataset_type, base_download_dir):
+    def __init__(self, filter_values, dataset_name, base_download_dir):
         """
         Dataset generator : Downloads the dataset from the dropbox.
 
         params:
             - filter_values : Filter values for the logcat files
                             Format : [runtime_per_file, num_logcat_lines_per_file, freq_logcat_event_per_file]
-            - dataset_type : Type of dataset that you want to create
+            - dataset_name : Name of dataset that you want to create
                             Can take one of the following values : ["std-dataset","cdyear1-dataset","cdyear2-dataset","cdyear3-dataset","bench-dataset"]
             
         """
@@ -515,7 +515,7 @@ class dataset_generator_downloader:
 
         # Base directory where all the files are downloaded
         self.base_download_dir = base_download_dir
-        self.dataset_type = dataset_type
+        self.dataset_name = dataset_name
         ############################### Generating black list for malware apks for all the datasets #################################
         vt_malware_report_path = os.path.join(self.root_dir_path, "res", "virustotal", "hash_VT_report_all_malware_vt10.json")
         
@@ -762,12 +762,12 @@ class dataset_generator_downloader:
             -num_download_threads : Number of simultaneous download threads.
             -download_flag : Download process starts if the flag is set to True
             
-        Output : Downloads the shortlisted files in <root_dir>/data/<dataset_type>. 
+        Output : Downloads the shortlisted files in <root_dir>/data/<dataset_name>. 
                 localhost_loc: Returns the list of local locations of downloaded files
                        
         '''
         # Create the download location on the local host
-        base_download_location = os.path.join(self.base_download_dir, self.dataset_type, app_type)
+        base_download_location = os.path.join(self.base_download_dir, self.dataset_name, app_type)
         
         # Get the dropbox api key
         with open(os.path.join(self.root_dir_path,"src","dropbox_api_key")) as f:
@@ -850,7 +850,7 @@ class dataset_generator_downloader:
 
     def generate_dataset_winter(self, download_file_flag, num_download_threads=0):
         """
-        Generates the dataset (benign,malware) based on the dataset_type and filter_values
+        Generates the dataset (benign,malware) based on the dataset_name and filter_values
         params:
             - download_file_flag : If True, then will download all the shortlisted files
             - num_download_threads : Number of simultaneous download threads. Only needed when download_file_flag is True.
@@ -862,7 +862,7 @@ class dataset_generator_downloader:
             - candidateLocalPathDict : Local locations of the files that should be downloaded
         """
         # 1. Create shortlisted files based on the logcat filter and dataset type
-        if self.dataset_type == "std-dataset":
+        if self.dataset_name == "std-dataset":
             # Get the location of the parser info files
             parser_info_benign1 = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_std_benign.json")
             parser_info_benign2 = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_std_benign_dev2.json")
@@ -882,7 +882,7 @@ class dataset_generator_downloader:
             shortlisted_files_malware = self.filter_shortlisted_files(shortlisted_files_malware)
 
             
-        elif self.dataset_type == "cdyear1-dataset":
+        elif self.dataset_name == "cdyear1-dataset":
             # Get the location of the parser info files
             parser_info_benign = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_cd_year1_benign.json")
             parser_info_malware = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_cd_year1_malware.json")
@@ -894,7 +894,7 @@ class dataset_generator_downloader:
             # Filter out the blacklisted files from the malware file list
             shortlisted_files_malware = self.filter_shortlisted_files(shortlisted_files_malware)
         
-        elif self.dataset_type == "cdyear2-dataset":
+        elif self.dataset_name == "cdyear2-dataset":
             # Get the location of the parser info files
             parser_info_benign = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_cd_year2_benign.json")
             parser_info_malware = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_cd_year2_malware.json")
@@ -906,7 +906,7 @@ class dataset_generator_downloader:
             # Filter out the blacklisted files from the malware file list
             shortlisted_files_malware = self.filter_shortlisted_files(shortlisted_files_malware)
         
-        elif self.dataset_type == "cdyear3-dataset":
+        elif self.dataset_name == "cdyear3-dataset":
             # Get the location of the parser info files
             parser_info_benign = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_cd_year3_benign.json")
             parser_info_malware = os.path.join(self.root_dir_path, "res/parser_info_files/kumal", f"parser_info_cd_year3_malware.json")
@@ -923,13 +923,13 @@ class dataset_generator_downloader:
             raise(ValueError("Incorrect dataset type specified"))
 
         #################### Dataset Info ####################
-        print(f"Information for the dataset : {self.dataset_type}")
+        print(f"Information for the dataset : {self.dataset_name}")
         print(f"- Number of benign files : {len(shortlisted_files_benign)}")
         print(f"- Number of malware files : {len(shortlisted_files_malware)}")
         ###################################################### 
         
         
-        # 2. Download the shortlisted files at <root_dir>/data/<dataset_type> 
+        # 2. Download the shortlisted files at <root_dir>/data/<dataset_name> 
         
         # Downloading the shortlisted performance counter files [Needs to be executed only once to download the files]
         malware_simpeperf_path =  self.download_shortlisted_files(shortlisted_files_malware, file_type= 'simpleperf', app_type= 'malware', num_download_threads=num_download_threads, download_flag=download_file_flag)
@@ -950,8 +950,8 @@ def generate_apk_list_for_software_AV_comparison(dataset_name, saveHashList_flag
         - writes the hashlist_benign and hashlist_malware for the specified dataset in res/softwareAVcomparisonApkList
     """
     print(dataset_name)
-    # dataset_generator_instance = dataset_generator_downloader(filter_values= [0,50,2], dataset_type=dataset_name, base_download_dir="/hdd_6tb/hkumar64/arm-telemetry/usenix_winter_dataset")
-    dataset_generator_instance = dataset_generator_downloader(filter_values= [0,0,0], dataset_type=dataset_name, base_download_dir="/hdd_6tb/hkumar64/arm-telemetry/usenix_winter_dataset")
+    # dataset_generator_instance = dataset_generator_downloader(filter_values= [0,50,2], dataset_name=dataset_name, base_download_dir="/hdd_6tb/hkumar64/arm-telemetry/usenix_winter_dataset")
+    dataset_generator_instance = dataset_generator_downloader(filter_values= [0,0,0], dataset_name=dataset_name, base_download_dir="/hdd_6tb/hkumar64/arm-telemetry/usenix_winter_dataset")
     shortlisted_files_benign,shortlisted_files_malware, _ = dataset_generator_instance.generate_dataset_winter(download_file_flag=False)
     hashlist_benign = dataset_generator_downloader.extract_hash_from_filename(shortlisted_files_benign)
     hashlist_malware = dataset_generator_downloader.extract_hash_from_filename(shortlisted_files_malware)
@@ -976,11 +976,11 @@ def generate_apk_list_for_software_AV_comparison(dataset_name, saveHashList_flag
 def main():
     baseDownloadDir = "/hdd_6tb/hkumar64/arm-telemetry/kumal_dataset"
     # # STD-Dataset
-    dataset_generator_instance = dataset_generator_downloader(filter_values= [0,50,2], dataset_type="std-dataset", base_download_dir=baseDownloadDir)
+    dataset_generator_instance = dataset_generator_downloader(filter_values= [0,50,2], dataset_name="std-dataset", base_download_dir=baseDownloadDir)
     # # CD-Dataset
-    # dataset_generator_instance = dataset_generator_downloader(filter_values= [0,0,0], dataset_type="std-dataset", base_download_dir=baseDownloadDir)
+    # dataset_generator_instance = dataset_generator_downloader(filter_values= [0,0,0], dataset_name="std-dataset", base_download_dir=baseDownloadDir)
     # # Bench-Dataset
-    # dataset_generator_instance = dataset_generator_downloader(filter_values= [15,50,2], dataset_type="bench-dataset", base_download_dir=baseDownloadDir)    
+    # dataset_generator_instance = dataset_generator_downloader(filter_values= [15,50,2], dataset_name="bench-dataset", base_download_dir=baseDownloadDir)    
     
     # shortlisted_files_benign,shortlisted_files_malware, candidateLocalPathDict = dataset_generator_instance.generate_dataset_winter(download_file_flag=False, num_download_threads=30)
     # num_benign, num_malware = dataset_generator_instance.count_number_of_apks() 
@@ -991,7 +991,7 @@ def main():
     # # ######################### Testing the datasplit generator #########################
     test_path = "/hdd_6tb/hkumar64/arm-telemetry/kumal_dataset/std-dataset"          
     x = dataset_split_generator(seed=10, partition_dist=[0.7,0.3])        
-    HPC_partition_for_HPC_individual, HPC_partition_labels_for_HPC_individual = x.create_all_datasets(base_location=test_path)
+    HPC_partition_for_HPC_individual, HPC_partition_labels_for_HPC_individual = x.create_HPC_partitions_and_labels_for_all_rn(base_location=test_path)
     # exit()
     # # ###################################################################################
     
@@ -1030,17 +1030,7 @@ def main():
     trainIter = iter(trainloader)
     batch_tensor, batch_labels, batch_paths = next(trainIter)
     print(f"batch_tensor.shape: {batch_tensor.shape} | batch_labels: {batch_labels} | batch_paths: {batch_paths}")
-    
-    Nch, _, length = batch_tensor.shape
-
-    fig, axs = plt.subplots(Nch, 1, figsize=(10, 5*Nch))
-
-    for i in range(Nch):
-        axs[i].plot(batch_tensor[i, 0, :])
-        axs[i].set_title('Channel {}'.format(i))
-
-    plt.savefig('test2.png')
-
+    exit()
     # # ###################################################################################
     
     

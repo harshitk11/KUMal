@@ -54,24 +54,9 @@ class dataloader_generator:
     """
     # Used to identify the partitions required for the different classification tasks for the different datasets : std-dataset, cd-dataset, bench-dataset
     partition_activation_flags = {
-                                    "std-dataset":{'DVFS_partition_for_HPC_DVFS_fusion':{"train":False, "trainSG":True, "test":False},
-                                                'HPC_partition_for_HPC_DVFS_fusion':{"train":False, "trainSG":True, "test":False},
-                                                'HPC_individual':{"train":True, "trainSG":False, "test":False},
-                                                'DVFS_individual':{"train":True, "trainSG":False, "test":False},
-                                                'DVFS_fusion':{"train":False, "trainSG":False, "test":False}},
-
-                                    "cd-dataset":{'DVFS_partition_for_HPC_DVFS_fusion':{"train":False, "trainSG":False, "test":True},
-                                                'HPC_partition_for_HPC_DVFS_fusion':{"train":False, "trainSG":False, "test":True},
-                                                'HPC_individual':{"train":False, "trainSG":False, "test":True},
-                                                'DVFS_individual':{"train":False, "trainSG":False, "test":True},
-                                                'DVFS_fusion':{"train":False, "trainSG":False, "test":False}},
-                                                
-                                    "bench-dataset":{'DVFS_partition_for_HPC_DVFS_fusion':{"train":False, "trainSG":False, "test":False},
-                                                    'HPC_partition_for_HPC_DVFS_fusion':{"train":False, "trainSG":False, "test":False},
-                                                    'HPC_individual':{"train":True, "trainSG":False, "test":True},
-                                                    'DVFS_individual':{"train":True, "trainSG":False, "test":True},
-                                                    'DVFS_fusion':{"train":False, "trainSG":False, "test":True}}
-                                    }
+                                    "std-dataset":{"train":True, "test":True},
+                                    "cd-dataset":{"train":False, "test":True},           
+                                }
 
     @staticmethod
     def get_dataset_type_and_partition_dist(dataset_name):
@@ -88,73 +73,52 @@ class dataloader_generator:
         if dataset_name == "std-dataset":
             # This dataset is used for training the base-classifiers and the second stage model
             dsGen_dataset_type = "std-dataset"
-            dsGem_partition_dist = [0.70,0.30,0]
-
-        elif dataset_name == "bench-dataset":
-            # This dataset is used for training and testing the base-classifiers. The goal of the dataset is to establish the non-determinism in the GLOBL channels.
-            dsGen_dataset_type = "bench-dataset"
-            dsGem_partition_dist = [0.70,0,0.30]
-
+            dsGem_partition_dist = [0.70,0.30]
+        
         elif (dataset_name == "cd-dataset") or (dataset_name == "cdyear1-dataset") or (dataset_name == "cdyear2-dataset") or (dataset_name == "cdyear3-dataset"):
             # This dataset is used for training and testing the base-classifiers. The goal of the dataset is to establish the non-determinism in the GLOBL channels.
             dsGen_dataset_type = "cd-dataset"
-            dsGem_partition_dist = [0,0,1]
+            dsGem_partition_dist = [0,1]
         
         else:
             raise ValueError("[main_worker] Incorrect dataset type specified for the dataset split generator.")
 
         return dsGen_dataset_type, dsGem_partition_dist
 
+## TODO: Start refactoring from here. prepare_dataloader() is done but verify once.
     @staticmethod
-    def prepare_dataloader(partition_dict, labels, file_type, dataset_type, clf_toi, args):
+    def prepare_dataloader(partition_dict, labels, dataset_type, args):
         """ 
         Configure the dataloader. Based on the dataset type and the classification task of interest,
-        this will return dataloaders for the tasks: "train","trainSG","test".
+        this will return dataloaders for the tasks: "train","test".
 
         params: 
             - partition_dict : {'train' : [file_path1, file_path2, ..],
-                            'trainSG' : [file_path1, file_path2, ..],
-                            'test' : [file_path1, file_path2]}
-
+                                'test' : [file_path1, file_path2]}
             - labels : {file_path1 : 1, file_path2: 0, ...}
-            - file_type : 'dvfs' or 'simpleperf'
             - dataset_type : Type of dataset. Can take one of the following values: {"std-dataset","bench-dataset","cd-dataset"}
-            - clf_toi : Classification task of interest. Can take one of the following values:
-                    ["DVFS_partition_for_HPC_DVFS_fusion", "HPC_partition_for_HPC_DVFS_fusion", "HPC_individual", "DVFS_individual", "DVFS_fusion"]
             - args :  arguments from the config file
 
         Output: 
-            - train, trainSG, and test dataloader objects depending on the dataset_type
+            - train and test dataloader objects depending on the dataset_type
         """
 
-        print(f'[Info] Fetching dataloader objects for classification toi: {clf_toi}, channel: {file_type}\n{"-"*100}')
+        print(f'[Info] Fetching dataloader objects for {dataset_type}')
     
-        # Find the partitions that will be required for this dataset. required_partitions = {"train":T or F, "trainSG":T or F, "test":T or F}
-        required_partitions = dataloader_generator.partition_activation_flags[dataset_type][clf_toi]
+        # Find the partitions that will be required for this dataset. required_partitions = {"train":T or F, "test":T or F}
+        required_partitions = dataloader_generator.partition_activation_flags[dataset_type]
         
         # Intitialize the custom collator
-        custom_collate_fn = custom_collator(args=args,
-                                            file_type=file_type)
+        custom_collate_fn = custom_collator(args=args)
  
-        # Normalize flag set to True for file_type = 'dvfs' and False for file_type = 'simpleperf'
-        if file_type=='dvfs':
-            normalize_flag = True
-        elif file_type=='simpleperf':
-            normalize_flag = False
-        else:
-            raise ValueError("Incorrect file_type passed to wrapper for dataloader")
-
         # Get the dataloader object : # get_dataloader() returns an object that is returned by torch.utils.data.DataLoader
-        trainloader, trainSGloader, testloader = get_dataloader(args, 
-                                                            partition = partition_dict, 
-                                                            labels = labels, 
-                                                            custom_collate_fn =custom_collate_fn,
-                                                            required_partitions=required_partitions, 
-                                                            normalize_flag=normalize_flag, 
-                                                            file_type= file_type, 
-                                                            N = None)
+        trainloader, testloader = get_dataloader(args=args, 
+                                                partition = partition_dict, 
+                                                labels = labels, 
+                                                custom_collate_fn =custom_collate_fn,
+                                                required_partitions=required_partitions)
 
-        return {'trainloader': trainloader, 'trainSGloader': trainSGloader, 'testloader': testloader}
+        return {'trainloader': trainloader, 'testloader': testloader}
     
     @staticmethod
     def get_dataloader_for_all_classification_tasks(all_dataset_partitionDict_label, dataset_type, args):
@@ -166,11 +130,7 @@ class dataloader_generator:
         params:
             - all_dataset_partitionDict_label: 
                                                 [
-                                                (DVFS_partition_for_HPC_DVFS_fusion, DVFS_partition_labels_for_HPC_DVFS_fusion),
-                                                (HPC_partition_for_HPC_DVFS_fusion, HPC_partition_labels_for_HPC_DVFS_fusion),
                                                 (HPC_partition_for_HPC_individual,HPC_partition_labels_for_HPC_individual),
-                                                (DVFS_partition_for_DVFS_individual,DVFS_partition_labels_for_DVFS_individual),
-                                                (DVFS_partition_for_DVFS_fusion,DVFS_partition_labels_for_DVFS_fusion)
                                                 ]
                                         
                                                 partition -> {'train' : [file_path1, file_path2, ..],
@@ -290,17 +250,11 @@ class feature_engineered_dataset:
     """
     Class containing all the methods for creating the feature engineered datasets for HPC and GLOBL channels.
     """
-    def __init__(self, args, all_dataset_partitionDict_label, dataset_type, results_path, fDataset) -> None:
+    def __init__(self, args, all_dataset_partitionDict_label, dataset_type, results_path) -> None:
         """
         params:
             - all_dataset_partitionDict_label: 
-                                                    [
-                                                    (DVFS_partition_for_HPC_DVFS_fusion, DVFS_partition_labels_for_HPC_DVFS_fusion),
-                                                    (HPC_partition_for_HPC_DVFS_fusion, HPC_partition_labels_for_HPC_DVFS_fusion),
-                                                    (HPC_partition_for_HPC_individual,HPC_partition_labels_for_HPC_individual),
-                                                    (DVFS_partition_for_DVFS_individual,DVFS_partition_labels_for_DVFS_individual),
-                                                    (DVFS_partition_for_DVFS_fusion,DVFS_partition_labels_for_DVFS_fusion)
-                                                    ]
+                                                    [(HPC_partition_for_HPC_individual,HPC_partition_labels_for_HPC_individual)]
                                             
                                                     partition -> {'train' : [file_path1, file_path2, ..],
                                                                     'trainSG' : [file_path1, file_path2, ..],
@@ -309,13 +263,8 @@ class feature_engineered_dataset:
                                                     labels -> {file_path1 : 0, file_path2: 1, ...}        [Benigns have label 0 and Malware have label 1]
                 
             - dataset_type: Can take one of the following values {'std-dataset','bench-dataset','cd-dataset'}. 
-                            Based on the dataset type we will activate different partitions ("train", "trainSG", "test") for the different classification tasks.
-            - results_path: Location of the base folder where all the feature engineered datasets are stored.
-            - fDataset: Dict storing the paths of all the datasets for all the classification tasks
-                        Format: fDataset = {"filter_val":{"runtime":{"clf_toi":{"rn_bin":{"split" :[dataset_path, labels_path, file_path], ... }}}}}
-        
-        Output:
-            - fDataset: Updated fDataset
+                            Based on the dataset type we will activate different partitions ("train", "test") for the different classification tasks.
+            - results_path: Location of the base folder where all the feature engineered datasets are stored.    
         """
         self.args = args
         self.all_dataset_partitionDict_label = all_dataset_partitionDict_label
@@ -328,31 +277,7 @@ class feature_engineered_dataset:
         # logcat_filter_rtime: Filter runtime used when filtering and downloading the dataset (in s) [Used for naming the output file]
         self.logcat_filter_rtime_threshold = args.runtime_per_file
 
-        # Classification tasks of interest
-        self.clf_toi_list = ["DVFS_partition_for_HPC_DVFS_fusion", "HPC_partition_for_HPC_DVFS_fusion", "HPC_individual", "DVFS_individual", "DVFS_fusion"]
-
-        self.fDataset = fDataset
-        # Dict storing the paths of all the datasets for all the classification tasks
-        if self.logcat_filter_rtime_threshold not in self.fDataset:
-            # Add an entry for logcat_filter_rtime_threshold
-            self.initialize_fDataset()
         
-
-    def initialize_fDataset(self):
-        """
-        Creates a new entry for logcat_filter_rtime_threshold.
-        fDataset[logcat_filter_rtime_threshold][rtime][clf_toi][rnBin][split] = None
-        """    
-        self.fDataset[self.logcat_filter_rtime_threshold] = {}
-        for rtime in self.rtime_list:
-            self.fDataset[self.logcat_filter_rtime_threshold][rtime] = {}
-            for clf_toi in self.clf_toi_list:
-                self.fDataset[self.logcat_filter_rtime_threshold][rtime][clf_toi] = {}
-                for rnBin in ["rn1","rn2","rn3","rn4","all"]:
-                    self.fDataset[self.logcat_filter_rtime_threshold][rtime][clf_toi][rnBin] = {}
-                    for split in ["train","trainSG","test"]:
-                        self.fDataset[self.logcat_filter_rtime_threshold][rtime][clf_toi][rnBin][split] = None
-
     @staticmethod
     def dataset_download_driver(args, xmd_base_folder_location, numApp_info_dict):
         """
@@ -363,22 +288,21 @@ class feature_engineered_dataset:
             - xmd_base_folder_location: Base folder of xmd's source code
         """
         # Folder where the dataset is downloaded
-        datasetDownloadLoc = os.path.join(args.dataset_base_location, args.dataset_type)
+        datasetDownloadLoc = os.path.join(args.dataset_base_location, args.dataset_name)
         
         global timeStampCandidateLocalPathDict
         dataset_generator_instance = dataset_generator_downloader(filter_values= [args.runtime_per_file, args.num_logcat_lines_per_file, args.freq_logcat_event_per_file], 
-                                                                        dataset_type=args.dataset_type,
+                                                                        dataset_name=args.dataset_name,
                                                                         base_download_dir=args.dataset_base_location)
 
         # Location where timestamp dict is stored
-        timeStampCandidateLocalPathDict_saveLocation = os.path.join(xmd_base_folder_location,"res","featureEngineeredDatasetDetails",f"timeStampCandidateLocalPathDict_{args.dataset_type}.pkl")
+        timeStampCandidateLocalPathDict_saveLocation = os.path.join(xmd_base_folder_location,"res","featureEngineeredDatasetDetails",f"timeStampCandidateLocalPathDict_{args.dataset_name}.pkl")
         
         # ######################################## For debugging ########################################    
         # _,_,candidateLocalPathDict = dataset_generator_instance.generate_dataset_winter(download_file_flag=False, num_download_threads=args.num_download_threads)
         #     # Update the timestamp list
         # timeStampCandidateLocalPathDict = candidateLocalPathDict
         # ###############################################################################################
-            
 
         # If the dataset is not downloaded, then download the dataset
         if not os.path.isdir(datasetDownloadLoc):
@@ -399,7 +323,7 @@ class feature_engineered_dataset:
         elif os.path.isdir(datasetDownloadLoc):
             print("***************** Dataset already downloaded. Trimming the dataset. *****************")
             # First generate the list of candidate local paths
-            _,_,candidateLocalPathDict = dataset_generator_instance.generate_dataset_winter(download_file_flag=False, num_download_threads=args.num_download_threads)
+            _,_,candidateLocalPathDict = dataset_generator_instance.generate_dataset_winter(download_file_flag=False)
             
             # Based on the list and the previous timestamplist, generate the list of files to be deleted from the downloaded dataset
             deleteFilePaths = {}
@@ -425,7 +349,7 @@ class feature_engineered_dataset:
         ############################ Log the info about this dataset ############################
         # Count the number of apks from the shortlisted files (This is the number of apks post logcat filter)
         num_benign,num_malware = dataset_generator_instance.count_number_of_apks()
-        numApp_info_dict[args.dataset_type][args.runtime_per_file] = {"NumBenignAPK":num_benign, "NumMalwareAPK":num_malware, "logcatRuntimeThreshold": args.runtime_per_file, "dataset_type":args.dataset_type}
+        numApp_info_dict[args.dataset_name][args.runtime_per_file] = {"NumBenignAPK":num_benign, "NumMalwareAPK":num_malware, "logcatRuntimeThreshold": args.runtime_per_file, "dataset_name":args.dataset_name}
 
         with open(os.path.join(args.run_dir, "dataset_info.json"),'w') as fp:
             json.dump(numApp_info_dict,fp, indent=2)
@@ -457,27 +381,12 @@ class feature_engineered_dataset:
         if not os.path.isdir(os.path.join(xmd_base_folder_location,"res","featureEngineeredDatasetDetails")):
             os.mkdir(os.path.join(xmd_base_folder_location,"res","featureEngineeredDatasetDetails"))
 
-        # Read fDataset (json that stores the paths of all the feature engineered datasets)
-        fAllDatasetPath = os.path.join(xmd_base_folder_location,"res","featureEngineeredDatasetDetails","info.json")
-        if os.path.isfile(fAllDatasetPath):
-            with open(fAllDatasetPath,'rb') as fp:
-                fDatasetAllDatasets = json.load(fp)
-
-                if args.dataset_type in fDatasetAllDatasets:
-                    fDataset = fDatasetAllDatasets[args.dataset_type]
-                else:
-                    fDatasetAllDatasets[args.dataset_type] = {}
-                    fDataset = fDatasetAllDatasets[args.dataset_type]
-        else:
-            # If it does not exist, then create a new one.
-            fDatasetAllDatasets = {args.dataset_type:{}}
-            fDataset = fDatasetAllDatasets[args.dataset_type]
         
         # Generate a list of the logcat-runtime_per_file values i.e. the iterations that we are downloading has the apks running atleast logcat-runtime_per_file seconds.
         logcat_rtimeThreshold_list = [i for i in range(0, args.collected_duration, args.step_size_logcat_runtimeThreshold)]
 
         # For storing the info about the number of benign and malware apks in the filtered dataset
-        numApp_info_dict = {args.dataset_type:{}}
+        numApp_info_dict = {args.dataset_name:{}}
         
         for logcatRtimeThreshold in logcat_rtimeThreshold_list:
             # Set the runtime threshold which is used by dataset_generator_downloader
@@ -490,44 +399,32 @@ class feature_engineered_dataset:
                                                                     numApp_info_dict = numApp_info_dict)
 
             # Get the dataset type and the partition dist for the dataset split generator
-            dsGen_dataset_type, dsGem_partition_dist = dataloader_generator.get_dataset_type_and_partition_dist(dataset_name= args.dataset_type)
+            dsGen_dataset_type, dsGem_partition_dist = dataloader_generator.get_dataset_type_and_partition_dist(dataset_name= args.dataset_name)
             
-            # Get the dataset base location
-            dataset_base_location = os.path.join(args.dataset_base_location, args.dataset_type)
-
             # Generate the dataset splits (partition dict and the labels dict)
+            dataset_base_location = os.path.join(args.dataset_base_location, args.dataset_name)
             dsGen = dataset_split_generator(seed=args.seed, 
-                                            partition_dist=dsGem_partition_dist, 
-                                            datasplit_dataset_type=dsGen_dataset_type)
-            all_datasets = dsGen.create_all_datasets(base_location=dataset_base_location)
+                                            partition_dist=dsGem_partition_dist)
+            HPC_partitions_and_labels_for_all_rn = dsGen.create_HPC_partitions_and_labels_for_all_rn(base_location=dataset_base_location)
 
             ################################################## Generate feature engineered dataset for all truncated durations ##################################################
-            featEngDatsetBasePath = os.path.join(xmd_base_folder_location,"data",featEngineerDatasetFolderName,args.dataset_type)
+            featEngDatsetBasePath = os.path.join(xmd_base_folder_location,"data",featEngineerDatasetFolderName,args.dataset_name)
             featEngineeringDriver = feature_engineered_dataset(args=args, 
-                                                        all_dataset_partitionDict_label = all_datasets, 
+                                                        all_dataset_partitionDict_label = HPC_partitions_and_labels_for_all_rn, 
                                                         dataset_type = dsGen_dataset_type, 
-                                                        results_path = featEngDatsetBasePath,
-                                                        fDataset=fDataset)
-            fDataset = featEngineeringDriver.generate_feature_engineered_dataset_per_logcat_filter()
+                                                        results_path = featEngDatsetBasePath)
+            featEngineeringDriver.generate_feature_engineered_dataset_per_logcat_filter()
             #####################################################################################################################################################################
-            # Dump the updated fDataset
-            fDatasetAllDatasets[args.dataset_type] = fDataset
-            with open(fAllDatasetPath,'w') as fp:
-                json.dump(fDatasetAllDatasets,fp, indent=2)
             
 
     def generate_feature_engineered_dataset_per_logcat_filter(self):
         """
         Method to generate the feature engineered dataset for all the classification tasks for a given logcat filter-value.
-        
-        Output:
-            Updates fDataset which is a parameter of the class. Returns the updated fDataset.
         """
         for rtime in self.rtime_list:
             print(f"\t----------- Generating feature engineered dataset for truncated duration : {rtime} -----------")
             self.generate_feature_engineered_dataset_per_rtime_per_logcat_filter(truncated_duration=rtime)
             # exit()
-        return self.fDataset
 
     def generate_feature_engineered_dataset_per_rtime_per_logcat_filter(self, truncated_duration):
         """
@@ -535,9 +432,6 @@ class feature_engineered_dataset:
         
         params:
             - truncated_duration: time to which you want to trim the time series (in s)
-            
-        Output:
-            Updates fDataset which is a parameter of the class. 
         """
         # Set the truncated duration in the args
         self.args.truncated_duration = truncated_duration
@@ -564,12 +458,8 @@ class feature_engineered_dataset:
                                                 truncated_duration= self.args.truncated_duration,
                                                 clf_toi=clf_toi,
                                                 rnBin=rnBin,
-                                                split_type=splitName)
-                        
-                        ## Save the paths of the created dataset to fDataset
-                        # print(f"\n{fpathList}")
-                        self.fDataset[self.logcat_filter_rtime_threshold][self.args.truncated_duration][clf_toi][rnBin][splitName] = fpathList
-
+                                                split_type=splitName) 
+                       
     def create_channel_bins(self, dataloaderX, truncated_duration, clf_toi, rnBin, split_type):
         """
         Creates the dataset (post feature engineering) for the different classification tasks. 
@@ -696,7 +586,7 @@ def main_worker(args, xmd_base_folder_location):
         - xmd_base_folder_location: Location of base folder of xmd
     """
     # Generate the feature engineered dataset for all logcat runtime thresholds and truncated durations for this dataset.
-    feature_engineered_dataset.generate_feature_engineered_dataset(args, xmd_base_folder_location, featEngineerDatasetFolderName="featureEngineeredDatasetWinter")
+    feature_engineered_dataset.generate_feature_engineered_dataset(args, xmd_base_folder_location, featEngineerDatasetFolderName="featureEngineeredDataset_KuMAL")
 
 
 def main():

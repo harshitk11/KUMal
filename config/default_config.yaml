@@ -7,17 +7,15 @@ runtime_per_file: 15                                  # Runtime measured by the 
 num_logcat_lines_per_file: 50                         # Number of logcat events in the logcat file 
 freq_logcat_event_per_file: 2                         # Average frequency of the logcat events i.e. number of logcat events per second
 
-dataset_type: 'cdyear3-dataset'                            # Dataset type (Can take one of the following values: {'std-dataset', 'bench-dataset', 'cdyear1-dataset', 'cdyear2-dataset', 'cdyear3-dataset'})
+dataset_name: 'cdyear3-dataset'                       # Dataset name (Can take one of the following values: {'std-dataset', 'bench-dataset', 'cdyear1-dataset', 'cdyear2-dataset', 'cdyear3-dataset'})
 dataset_download_flag: True                           # Flag that decides whether or not to download the dataset from Dropbox
 num_download_threads: 30                              # Number of files you want to simultaneuously download
 ################################################################################################################################
 
 ######################################### Parameters for performing late-stage fusion ##########################################
-dataset_base_location: "/hdd_6tb/hkumar64/arm-telemetry/usenix_winter_dataset"            # Base location where all the datasets will be downloaded
-results_base_location: "/data/hkumar64/projects/arm-telemetry/xmd/results"         # Base location where all the result files will be stored
+dataset_base_location: "/hdd_6tb/hkumar64/arm-telemetry/kumal_dataset"            # Base location where all the datasets will be downloaded
 create_runs_dir: True                                                             # If True, then will create a runs dir to track the experimental run
 seed: 10                                                                           # Random seed to be used for this experiment
-device: "cuda:1"
 ################################################################################################################################
 
 ########################################## Parameters for configuring the dataloader ###########################################
@@ -37,19 +35,6 @@ test_shuffle: False                                   # Flag for shuffling the t
 ################################## Parameters for feature engineering (passed to collate_fn) ###################################
 collected_duration: 90                                # Duration for which the telemetry logs is collected
 step_size_truncated_duration: 15                       # Step size for incrementing the truncated duration
-# Parameters for feature reduction (for GLOBL file_type)
-chunk_time: 1                                         # Window size (in s) over which the spectrogram will be calculated
-feature_engineering_flag: True                        # Flag that decides whether to perform feature engineering on the raw time series data
-reduced_frequency_size: 12                            # Number of principal components to consider for dimensionality reduction of the frequency axis
-reduced_time_size: 4                                  # Number of principal components to consider for dimensionality reduction of the time axis
-n_fft: 1024                                           # Order of fft for stft [Used in dimensionality reduction]
-
-# Parameters for resampling GLOBL
-custom_num_datapoints: 180000                         # Number of data points in the resampled time series
-resampling_type: "custom"                             # Type of resampling. Can take one of the following values: ['max', 'min', 'custom']
-resample: True                                        # Flag to determine whether or not to resample
-
-# Parameters for feature engineering of HPC
 num_histogram_bins: 32                                    # HPC time series is divided into histogram bins. This parameter defines the number of histogram bins.
 ################################################################################################################################
 
