@@ -11,18 +11,15 @@ from os import listdir, mkdir
 from os.path import isfile, join, isdir
 import math
 import json
-import torch.utils.data as data_utils
 import numpy as np
 import matplotlib.pyplot as plt
 import dropbox
 import re
-import torchaudio
 import numpy as np
-from sklearn.decomposition import PCA
 import pickle
 import traceback
 from multiprocessing import Pool, Process
-import warnings
+import argparse
 
 BENIGN_LABEL = 0
 MALWARE_LABEL = 1
@@ -63,7 +60,7 @@ class arm_telemetry_data(torch.utils.data.Dataset):
     __len__(self) : len(dataset)
     '''
 
-    def __init__(self, partition, labels, split, file_type, normalize):
+    def __init__(self, partition, labels, split):
         '''
             -labels = {file_path1 : 0, file_path2: 0, ...}
 
@@ -71,59 +68,36 @@ class arm_telemetry_data(torch.utils.data.Dataset):
                                 'trainSG' : [file_path1, file_path2, ..],
                                 'val' : [file_path1, file_path2]}
 
-            -split = 'train', 'trainSG', or 'val'
-            -file_type = 'dvfs' or 'simpleperf' [Different parsers for different file types]                    
+            -split = 'train', or 'test'                    
         '''
-        if(split not in ['train','trainSG','test']):
-            raise NotImplementedError('Can only accept Train, TrainSG, Test')
+        if(split not in ['train','test']):
+            raise NotImplementedError('Can only accept Train, Test')
 
         # Store the list of paths (ids) in the split
         self.path_ids = partition[split] 
-        
         # Store the list of labels
         self.labels = labels
-        # Whether or not you want to normalize the data [default=True]
-        self.normalize = normalize
-        # File type for selecting the parser module
-        self.file_type = file_type
-
+        
     def __len__(self):
         return len(self.path_ids)
      
     def __getitem__(self, idx):
+        """
+        params:
+            - idx: index of the sample to be returned
+        Output:
+            - X: the hpc tensor of shape (Nchannels,T)
+            - y: the corresponding label
+            - id: the corresponding file path that contains the data
+        """
         # Select the sample [id = file path of the dvfs file]
         id = self.path_ids[idx]
 
-        # Get the label
+        # Get the label and hpc tensor
         y = self.labels[id]
+        X = self.read_simpleperf_file(id)
 
-        if self.file_type == 'dvfs':
-            # Read and parse the file. NOTE: Each dvfs file has a different sampling frequency
-            X = self.read_dvfs_file(id)
-        elif self.file_type == 'simpleperf':
-            # Read and parse the simpleperf file
-            X = self.read_simpleperf_file(id)
-        else:
-            raise ValueError('Incorrect file type provided to the dataloader')
-        X_std = X
-
-        # Normalize
-        if self.normalize and (X_std is not None):
-            # X : Nchannel x num_data_points
-
-            # Calculate mean of each channel
-            mean_ch = torch.mean(X,dim=1)
-            
-            # Calculate std of each channel
-            std_ch = torch.std(X,dim=1)
-            floor_std_ch = torch.tensor([1e-12]*X.shape[0]) 
-            std_ch = torch.maximum(std_ch,floor_std_ch) # To avoid the division by zero error
-            
-            # Normalize
-            X_std = (X - torch.unsqueeze(mean_ch,1))/torch.unsqueeze(std_ch,1)
-            
-        # Return the dvfs/hpc tensor (X_std), the corresponding label (y), and the corresponding file path that contains the name (id)
-        return X_std,y,id
+        return X,y,id
 
     def read_simpleperf_file(self, f_path):
         '''
@@ -188,149 +162,59 @@ class arm_telemetry_data(torch.utils.data.Dataset):
         perf_tensor_transposed = torch.transpose(perf_tensor, 0, 1)
 
         return perf_tensor_transposed
-                    
-
-    def read_dvfs_file(self, f_path):
-        '''
-        Reads the dvfs file at path = fpath, parses it, and returns a tensor of shape (Nchannels,T)
-        '''
-        # List containing the parsed lines of the file. Each element is one line of the file.
-        dvfs_list = []
-
-        with open(f_path) as f:
-            try:
-                next(f) #Skip the first line containing the timestamp
-            except StopIteration:
-                # File is empty. Log the location of this file and return None.
-                with open("/data/hkumar64/projects/arm-telemetry/xmd/res/filesToDelete.txt", "a") as myfile:
-                    myfile.write(f"{f_path}\n")
-                print(f" ** Empty dvfs file found : {f_path}")
-                return None
-
-            for line in f:
-                try:
-                    dvfs_list.append(list(map(float,line.split())))
-                except: # Skip the lines that throw error (Usually the last line)
-                    print("************************************************** Parsing issue in DVFS ******************************************************************************")
-                    print(f_path)
-                        
-        # Convert the list to a tensor (Shape : Num_data_points x Num_channels)
-        try:
-            dvfs_tensor = torch.tensor(dvfs_list[:-1]) # Skipping the last line as it may be incomplete in some files
-        except:
-            print("************************************************** Missing data ******************************************************************************")
-            print(f_path)
-            print([i for (i,item) in enumerate(dvfs_list) if len(item) != 17])
-
-        # Transpose the tensor to shape : Num_channels x Num_data_points
-        dvfs_tensor_transposed = torch.transpose(dvfs_tensor, 0, 1)
-
-        # Substract successive values in chn_idx-13 (rx_bytes) . This channel has cumulative data. Need to convert it into individual points..
-        dvfs_tensor_transposed[13] = dvfs_tensor_transposed[13] - torch.cat([torch.tensor([dvfs_tensor_transposed[13][0]]), dvfs_tensor_transposed[13][:-1]])
-        # Substract successive values in chn_idx-14 (tx_bytes) . This channel has cumulative data. Need to convert it into individual points..
-        dvfs_tensor_transposed[14] = dvfs_tensor_transposed[14] - torch.cat([torch.tensor([dvfs_tensor_transposed[14][0]]), dvfs_tensor_transposed[14][:-1]])
-        # Discard the first 2 channels (they contain only the timestamps)
-        filtered_dvfs_tensor = dvfs_tensor_transposed[2:]
-    
-        return filtered_dvfs_tensor    
+                
         
 
 class custom_collator(object):
-    def __init__(self, args, file_type):
-        # Parameters for truncating the dvfs and hpc time series. Consider the first truncated_duration seconds of the iteration
+    def __init__(self, args):
+        # Parameters for truncating the hpc time series. Consider the first truncated_duration seconds of the iteration
         self.truncated_duration = args.truncated_duration
         # Duration for which data is collected 
         self.cd = args.collected_duration 
-        
-        ###################### Feature engineering parameters of the GLOBL channels ######################
-        self.chunk_time = args.chunk_time # Window size (in s) over which the spectrogram will be calculated  
-        
-        # Parameters for resampling DVFS
-        self.custom_num_datapoints = args.custom_num_datapoints # Number of data points in the resampled time series
-        self.resampling_type = args.resampling_type # Type of resampling. Can take one of the following values: ['max', 'min', 'custom']
-        self.resample = args.resample # Whether or not to resample. Default : True
-
-        # Parameters for feature reduction (for DVFS file_type)
-        self.reduced_frequency_size = args.reduced_frequency_size # dimension of frequency axis after dimensionality reduction
-        self.reduced_time_size = args.reduced_time_size # dimension of time axis after dimensionality reduction
-        self.reduced_feature_flag = args.feature_engineering_flag # If True, then we perform feature reduction. Defaule is False.
-        self.n_fft = args.n_fft # Order of fft for stft
-
-        # For selecting file_type : "dvfs" or "simpleperf"
-        self.file_type = file_type
-
-        ###################### Feature engineering parameters of the HPC channels ########################
         # Feature engineering parameters for simpleperf files
         self.num_histogram_bins = args.num_histogram_bins
-
+        # Flag to indicate if we want to feature engineer
+        self.reduced_feature_flag = args.feature_engineering_flag
+        
     def __call__(self, batch):
         '''
         Takes a batch of files, outputs a tensor of of batch, the corresponding labels, and the corresponding file paths
         - If reduced_feature_flag is False, then will return a list instead of a stacked tensor, for both dvfs and simpleperf
-        '''
-        if self.file_type == "dvfs":
-            # batch_dvfs : [iter1, iter2, ... , iterB]  (NOTE: iter1 - Nchannels x T1 i.e. Every iteration has a different length. Duration of data collection is the same. Sampling frequency is different for each iteration)
-            # batch_labels : [iter1_label, iter2_label, ...iterB_label]
-            # batch_paths : [iter1_path, iter2_path, ...iterB_path]
-            batch_dvfs, batch_labels, batch_paths = list(zip(*batch))
+        '''    
+        # batch_hpc : [iter1, iter2, ... , iterB]  (NOTE: iter1 - Nchannels x T1 i.e. Every iteration has a different length. Duration of data collection is the same. Sampling frequency is different for each iteration)
+        # batch_labels : [iter1_label, iter2_label, ...iterB_label]
+        # batch_paths : [iter1_path, iter2_path, ...iterB_path]
+        batch_hpc, batch_labels, batch_paths = list(zip(*batch))
 
-            # Filter out the empty files
-            batch_labels = [x for i,x in enumerate(batch_labels) if batch_dvfs[i] is not None]
-            batch_paths = [x for i,x in enumerate(batch_paths) if batch_dvfs[i] is not None]
-            batch_dvfs = [x for x in batch_dvfs if x is not None]
-            assert (len(batch_labels)==len(batch_paths)) and (len(batch_dvfs)==len(batch_paths)), "Mismatch in number of dataset tensor and corresponding labels and paths" 
+        if self.reduced_feature_flag:
+            # Stores the dimension reduced hpc for each batch
+            reduced_batch_hpc = []
 
-            if self.resample:
-                # Resample so that each iteration in the batch has the same number of datapoints
-                resampled_batch_dvfs, target_fs = self.resample_dvfs(batch_dvfs)
-            else:
-                resampled_batch_dvfs = batch_dvfs 
-
-            with warnings.catch_warnings():
-                # NOTE: PCA will raise warning for time series with constant value. This is fine. The feature reduced vector will be all zeros.
-                warnings.filterwarnings("ignore", message="invalid value encountered in true_divide")
-                # Perform feature reduction on the batch of resampled dataset, so that number of features for every sample = 40
-                if self.reduced_feature_flag: #If reduced_feature_flag is set to True, then perform feature reduction
-                    batch_tensor = self.perform_feature_reduction(resampled_batch_dvfs, target_fs)
-            
-                else: # Just pass the resampled dvfs data
-                    batch_tensor = resampled_batch_dvfs
-         
-
-        elif self.file_type == "simpleperf":
-            # batch_hpc : [iter1, iter2, ... , iterB]  (NOTE: iter1 - Nchannels x T1 i.e. Every iteration has a different length. Duration of data collection is the same. Sampling frequency is different for each iteration)
-            # batch_labels : [iter1_label, iter2_label, ...iterB_label]
-            # batch_paths : [iter1_path, iter2_path, ...iterB_path]
-            batch_hpc, batch_labels, batch_paths = list(zip(*batch))
-
-            if self.reduced_feature_flag:
-                # Stores the dimension reduced hpc for each patch
-                reduced_batch_hpc = []
-
-                # Divide the individual variates of the tensor into num_histogram_bins. And sum over the individual intervals to form feature size of 32 for each variate.
-                for hpc_iter_tensor in batch_hpc:
-                    # Take the truncated duration of the tensor
-                    hpc_iter_tensor = self.truncate_hpc_tensor(hpc_iter_tensor)
-                    
-                    ## hpc_intervals : [chunks of size - Nchannels x chunk_size] where chunk_size = lengthOfTimeSeries/self.num_histogram_bins
-                    hpc_intervals = torch.tensor_split(hpc_iter_tensor, self.num_histogram_bins, dim=1)
-                    
-                    # Take sum along the time dimension for each chunk to get chunks of size -  Nchannels x 1
-                    sum_hpc_intervals = [torch.sum(hpc_int,dim=1, keepdim=False) for hpc_int in hpc_intervals]
-                    
-                    # Concatenate the bins to get the final feature tensor
-                    hpc_feature_tensor = torch.cat(sum_hpc_intervals, dim=0)
-                    
-                    # Adding one dimension for channel [for compatibility purpose]. N_Channel = 1 in this case.
-                    reduced_batch_hpc.append(torch.unsqueeze(hpc_feature_tensor, dim=0)) 
-
-                batch_tensor = torch.stack(reduced_batch_hpc, dim=0)
-            
-            else:
-                # NOTE: This is not a tensor. It is a list of the iterations.
-                batch_tensor = batch_hpc 
+            # Divide the individual variates of the tensor into num_histogram_bins. And sum over the individual intervals to form feature size of 32 for each variate.
+            for hpc_iter_tensor in batch_hpc:
+                # Take the truncated duration of the tensor
+                hpc_iter_tensor = self.truncate_hpc_tensor(hpc_iter_tensor)
+                
+                ## hpc_intervals : [chunks of size - Nchannels x chunk_size] where chunk_size = lengthOfTimeSeries/self.num_histogram_bins
+                hpc_intervals = torch.tensor_split(hpc_iter_tensor, self.num_histogram_bins, dim=1)
+                
+                # Take sum along the time dimension for each chunk to get chunks of size -  Nchannels x 1
+                sum_hpc_intervals = [torch.sum(hpc_int,dim=1, keepdim=False) for hpc_int in hpc_intervals]
+                                    
+                # Concatenate the bins to get the final feature tensor
+                hpc_feature_tensor = torch.cat(sum_hpc_intervals, dim=0)
+                
+                # Adding one dimension for channel [for compatibility purpose]. N_Channel = 1 in this case.
+                reduced_batch_hpc.append(torch.unsqueeze(hpc_feature_tensor, dim=0)) 
+                
+            batch_tensor = torch.stack(reduced_batch_hpc, dim=0)
+        
+        else:
+            # NOTE: This is not a tensor. It is a list of the iterations.
+            batch_tensor = batch_hpc 
 
         return batch_tensor, torch.tensor(batch_labels), batch_paths
+
 
     def truncate_hpc_tensor(self, hpc_tensor):
         """
@@ -343,10 +227,10 @@ class custom_collator(object):
             - truncated_hpc_tensor: truncated hpc tensor with the time channel removed
         """
         # Get the index of the timestamp in the hpc_tensor
-
         timestamp_array = np.round(hpc_tensor[0].numpy(), decimals=1)
+        
+        # If the truncated duration is more than the length of collection duration, then return the last collected time stamp
         if self.truncated_duration > np.amax(timestamp_array):
-            # If the truncated duration is more than the length of collection duration, then return the last collected time stamp
             truncation_index = len(timestamp_array)
         else:
             # truncation_index = np.where(timestamp_array == self.truncated_duration)[0][0]+1
@@ -356,7 +240,7 @@ class custom_collator(object):
         truncated_hpc_tensor = hpc_tensor[:,:truncation_index]
         # Remove the time axis
         truncated_hpc_tensor = truncated_hpc_tensor[1:]
-
+        
         return truncated_hpc_tensor
 
     @staticmethod
@@ -367,219 +251,50 @@ class custom_collator(object):
         array = np.asarray(array)
         idx = (np.abs(array - value)).argmin()
         return idx
-
-    def perform_feature_reduction(self, resampled_batch_dvfs, resampled_fs):
-        '''
-        Function to reduce the number of features for every iteration to 'reduced_feature_size'. The method also performs truncation of the 
-        telemetry to the first "self.truncation_duration" seconds.
-
-        params:  
-            -resampled_batch_dvfs : list of resampled iterations [iter1, iter2, ... , iterB] where shape of iter1 = Nch x Num_data_points
-            -resampled_fs : sampling frequency of iteration (same for all the iterations)
-        Output : 
-            - feature_reduced_batch_tensor : Tensor of shape (B, Nch, reduced_feature_size)
-        '''
-        # Stores the dimension reduced dvfs
-        reduced_batch_dvfs = []
-
-        # Calculate the number of datapoints in the truncated timeseries
-        numDatapointTruncatedSeries = int(resampled_fs * self.truncated_duration) 
-        
-        for idx, iter in enumerate(resampled_batch_dvfs):
-            
-            # Truncate the time series
-            iter = iter[:,:numDatapointTruncatedSeries]
-            
-            ###################################################### FFT based feature reduction ######################################################
-            # Perform windowed FFT on each iteration (shape of stft_transform: Nch, N_Freq_steps, N_time_steps, 2) Ref : https://pytorch.org/docs/stable/generated/torch.stft.html
-            # Last dimension contains the real and the imaginary part
-            stft_transform = torch.stft(input=iter, n_fft = self.n_fft, return_complex=False)
-            
-            # Get the magnitude from the stft (shape : Nch, N_Freq_steps, N_time_steps)
-            stft_transform = torch.sqrt((stft_transform**2).sum(-1))
-            Nch,_,_ = stft_transform.shape
-            
-            channel_dimension_reduced = []
-            # Perform PCA on the time axis to reduce the number of time
-            for chn_indx,channel in enumerate(stft_transform):
-                # Current axis orientation is (frequency, time). Perform dimensionality reduction on frequency. So swap the orientation. 
-                channel = np.transpose(channel)
-               
-                # Orientation is now (time,frequency)
-                # Initialize the PCA. Reduce the frequency dimension to self.reduced_frequency_size
-                # NOTE: PCA will raise warning for time series with constant value. This is fine. The feature reduced vector will be all zeros.
-                pca = PCA(n_components=self.reduced_frequency_size)
-                frequency_reduced = pca.fit_transform(channel)
-               
-                # Current axis orientation is (time,frequency). Perform dimensionality reduction on time. So swap the orientation (frequency,time). 
-                frequency_reduced = np.transpose(frequency_reduced)
-                
-                # Initialize the PCA. Reduce the time dimension to self.reduced_time_size
-                pca = PCA(n_components=self.reduced_time_size)
-                time_frequency_reduced = pca.fit_transform(frequency_reduced)
-
-                # Current axis orientation is (frequency,time).  Change orientation to (time, frequency)
-                time_frequency_reduced = np.transpose(time_frequency_reduced)
-                
-                # Flatten the array (Shape : reduced_frequency_size*reduced_time_size)
-                time_frequency_reduced = time_frequency_reduced.flatten()
-                
-                channel_dimension_reduced.append(time_frequency_reduced)
-            
-            channel_dimension_reduced_tensor = np.stack(channel_dimension_reduced, axis=0)
-            #############################################################################################################################################
-
-            reduced_batch_dvfs.append(channel_dimension_reduced_tensor)
-        
-        # Shape : B,Nch,reduced_feature_size
-        reduced_batch_dvfs_tensor = np.stack(reduced_batch_dvfs, axis=0)
-        return torch.tensor(reduced_batch_dvfs_tensor)
-
     
-    def resample_dvfs(self, batch_dvfs):
-        '''
-        Function to resample a batch of dvfs iterations
-            -Input: batch of iterations
-            -Output : List of resampled batch of iterations, target_frequency (frequency of the resampled batch)
-        '''
 
-        # Get the number of datapoints for each iteration in the batch
-        num_data_points = [b_dvfs.shape[1] for b_dvfs in batch_dvfs]
-        
-        # Calculate the sampling frequency for each iteration in the batch
-        fs_batch = [ndp//self.cd for ndp in num_data_points]
-        
-        # Get the max and min sampling frequency (Will be used for resampling)
-        max_fs, min_fs= [max(fs_batch), min(fs_batch)]
-        
-        # Check what kind of resampling needs to be performed, and set the corresponding target frequency
-        if(self.resampling_type == 'max'):
-            target_fs = max_fs
-        elif(self.resampling_type == 'min'):
-            target_fs = min_fs
-        elif(self.resampling_type == 'custom'):
-            target_fs = self.custom_num_datapoints/self.cd
-        else:
-            raise NotImplementedError('Incorrect resampling argument provided')
-        
-        # Resample each iteration in the batch using the target_fs
-        resampled_batch_dvfs = []
-
-        for idx,iter in enumerate(batch_dvfs):
-            # Initialize the resampler
-            resample_transform = torchaudio.transforms.Resample(orig_freq=fs_batch[idx], new_freq=target_fs, lowpass_filter_width=6, resampling_method='sinc_interpolation')
-            r_dvfs = resample_transform(iter)
-            resampled_batch_dvfs.append(r_dvfs)
-
-        return resampled_batch_dvfs, target_fs
-
-def get_dataloader(args, partition, labels, custom_collate_fn, required_partitions, normalize_flag, file_type, N=None):
+def get_dataloader(args, partition, labels, custom_collate_fn, required_partitions):
     '''
     Returns the dataloader objects for the different partitions.
 
     params: 
         -partition = {'train' : [file_path1, file_path2, ..],
-                            'test' : [file_path1, file_path2, ..],
-                            'val' : [file_path1, file_path2]}
+                            'test' : [file_path1, file_path2, ..]}
                             
         -labels : {file_path1 : 0, file_path2: 1, ...}  (Benigns have label 0 and Malware have label 1)
         
-        -custom_collate_fn : Custom collate function object (Resamples and creates a batch of spectrogram B,T_chunk,Nch,H,W)
+        -custom_collate_fn : Custom collate function object (Used for feature reduction)
 
-        -required_partitions : required_partitions = {"train":T or F, "trainSG":T or F, "test":T or F}           
-        
-        -N  : [num_training_samples, num_trainSG_samples, num_testing_samples]
-                If N is specified, then we are selecting a subset of files from the dataset 
-
-        -normalize_flag : Will normalize the data if set to True. [Should be set to True for 'dvfs' and False for 'simpleperf'] 
-
-        -file_type : 'dvfs' or 'simpleperf' -> Different parsers used for each file_type
-
+        -required_partitions : required_partitions = {"train":T or F, "test":T or F}           
+   
     Output: 
-        - trainloader, trainSGloader, testloader : Dataloader object for train, trainSG, and test data.
+        - trainloader, testloader : Dataloader object for train and test data.
     '''
-    trainloader, trainSGloader, testloader = None, None, None
+    trainloader, testloader = None, None
 
     # Initialize the custom dataset class for training, validation, and test data
     if required_partitions["train"]:
-        ds_train_full = arm_telemetry_data(partition, labels, split='train', file_type= file_type, normalize=normalize_flag)
-    
-    if required_partitions["trainSG"]:
-        ds_trainSG_full = arm_telemetry_data(partition, labels, split='trainSG', file_type= file_type, normalize=normalize_flag)
-    
-    if required_partitions["test"]:
-        ds_test_full = arm_telemetry_data(partition, labels, split='test', file_type= file_type, normalize=normalize_flag)
-
-    if N is not None:
-        # You are using a subset of the complete dataset
-        print(f'[Info] ############### Using Subset : Num_train = {N[0]}, Num_val = {N[1]}, Num_test = {N[2]} ##################')
-        if len(N) != 3:
-            raise NotImplementedError('Size of Array should be 3')
-
-        if (required_partitions["train"]):
-            if (N[0] > ds_train_full.__len__()):
-                raise NotImplementedError(f"More samples than present in DS. Demanded : {N[0]} | Available: {ds_train_full.__len__()}")
-            else:
-                indices = torch.arange(N[0])
-                ds_train = data_utils.Subset(ds_train_full, indices)
-
-        if (required_partitions["trainSG"]):
-            if (N[1] > ds_trainSG_full.__len__()):
-                raise NotImplementedError(f'More samples than present in DS. Demanded : {N[1]} | Available: {ds_trainSG_full.__len__()}')
-            else:
-                indices = torch.arange(N[1])
-                ds_trainSG = data_utils.Subset(ds_trainSG_full, indices)
-
-        if (required_partitions["test"]):
-            if (N[2] > ds_test_full.__len__()):
-                raise NotImplementedError(f'More samples than present in DS. Demanded : {N[2]} | Available: {ds_test_full.__len__()}')
-            else:
-                indices = torch.arange(N[2])
-                ds_test = data_utils.Subset(ds_test_full, indices)
-
-    else: 
-        # Using the complete dataset
-        if (required_partitions["train"]):
-            ds_train = ds_train_full
-            
-        if (required_partitions["trainSG"]):
-            ds_trainSG = ds_trainSG_full
-            
-        if (required_partitions["test"]):
-            ds_test = ds_test_full
-            
-    
-    # Create the dataloader object for training, validation, and test data
-    if (required_partitions["train"]):
+        ds_train_full = arm_telemetry_data(partition, labels, split='train')
         trainloader = torch.utils.data.DataLoader(
-            ds_train,
+            ds_train_full,
             num_workers=args.num_workers,
             batch_size=args.train_batchsz,
             collate_fn=custom_collate_fn,
             shuffle=args.train_shuffle,
         )
-
-    if (required_partitions["trainSG"]):    
-        trainSGloader = torch.utils.data.DataLoader(
-            ds_trainSG,
-            num_workers=args.num_workers,
-            batch_size=args.train_batchsz,
-            collate_fn=custom_collate_fn,
-            shuffle=args.test_shuffle,
-            sampler = torch.utils.data.SequentialSampler(ds_trainSG)
-        )
-
-    if (required_partitions["test"]):
+    
+    if required_partitions["test"]:
+        ds_test_full = arm_telemetry_data(partition, labels, split='test', file_type= file_type, normalize=normalize_flag)
         testloader = torch.utils.data.DataLoader(
-            ds_test,
+            ds_test_full,
             num_workers=args.num_workers,
             batch_size=args.test_batchsz,
             collate_fn=custom_collate_fn,
             shuffle=args.test_shuffle,
-            sampler = torch.utils.data.SequentialSampler(ds_test)
+            sampler = torch.utils.data.SequentialSampler(ds_test_full)
         )
 
-    return trainloader, trainSGloader, testloader
+    return trainloader, testloader
 
 
 class dataset_split_generator:
@@ -596,19 +311,17 @@ class dataset_split_generator:
  
     """
     
-    def __init__(self, seed, partition_dist, datasplit_dataset_type) -> None:
+    def __init__(self, seed, partition_dist) -> None:
         """
         params:
             - seed : Used for shuffling the file list before generating the splits
             - partition_dist = [num_train_%, num_test_%]
                                 - num_train_% : percentage training samples
                                 - num_test_% : percentage test samples
-            - datasplit_dataset_type : Can take one of the following values {'std-dataset', 'cd-dataset'}
         """
         self.seed = seed
         self.partition_dist = partition_dist
-        self.dataset_type = datasplit_dataset_type
-
+        
 
     @staticmethod
     def create_labels_from_filepaths(benign_filepaths = None, malware_filepaths = None):
@@ -766,7 +479,7 @@ class dataset_split_generator:
         #########################*******************************************************************************************************##############################        
         
         ################################ Unit tests for testing the HPC individual partitions ################################        
-        print(f"-> Stats for HPC-individual for dataset {self.dataset_type}.")
+        print(f"-> Stats for HPC-individual with train-test split: {self.partition_dist}.")
         try:
             for rn_indx, rn_partition_dict in enumerate(HPC_partition_for_HPC_individual):
                 print(f" - numFiles in rn bin : {rn_indx+1}")
@@ -1259,9 +972,6 @@ def generate_apk_list_for_software_AV_comparison(dataset_name, saveHashList_flag
         with open(malwareHashList_location, 'wb') as fp:
             pickle.dump(hashlist_malware, fp)
 
-       
-
-    
 
 def main():
     baseDownloadDir = "/hdd_6tb/hkumar64/arm-telemetry/kumal_dataset"
@@ -1278,20 +988,69 @@ def main():
     # exit()
 
 
-    # ######################### Testing the datasplit generator #########################
+    # # ######################### Testing the datasplit generator #########################
     test_path = "/hdd_6tb/hkumar64/arm-telemetry/kumal_dataset/std-dataset"          
-    x = dataset_split_generator(seed=10, partition_dist=[0.7,0.3], datasplit_dataset_type="std-dataset")        
-    x.create_all_datasets(base_location=test_path)
-    exit()
-    # ###################################################################################
+    x = dataset_split_generator(seed=10, partition_dist=[0.7,0.3])        
+    HPC_partition_for_HPC_individual, HPC_partition_labels_for_HPC_individual = x.create_all_datasets(base_location=test_path)
+    # exit()
+    # # ###################################################################################
     
-    ######################### Generating hash list for software AV comparison #########################
-    saveHashList_flag = True
-    generate_apk_list_for_software_AV_comparison(dataset_name = "std-dataset", saveHashList_flag=saveHashList_flag)
-    generate_apk_list_for_software_AV_comparison(dataset_name = "cdyear1-dataset", saveHashList_flag=saveHashList_flag)
-    generate_apk_list_for_software_AV_comparison(dataset_name = "cdyear2-dataset", saveHashList_flag=saveHashList_flag)
-    generate_apk_list_for_software_AV_comparison(dataset_name = "cdyear3-dataset", saveHashList_flag=saveHashList_flag)
-    ###################################################################################################
+    # # ################# Testing the dataset class and dataloader ########################
+    rnval = 0
+    dataset_c = arm_telemetry_data(partition=HPC_partition_for_HPC_individual[rnval], 
+                                   labels=HPC_partition_labels_for_HPC_individual[rnval],
+                                   split="train")
+    
+    # # Print the first 10 items in the dataset (testing the dataset class)
+    # for item_indx in range(10):
+    #     X,y,id = dataset_c.__getitem__(item_indx)
+    #     print(f"X.shape: {X.shape} | y: {y} | id: {id}")
+    
+    # Define the argument parser
+    parser = argparse.ArgumentParser(description='Example arguments')
+    parser.add_argument('--truncated_duration', type=float, default=30,
+                        help='Duration for truncating HPC time series')
+    parser.add_argument('--collected_duration', type=float, default=90.0,
+                        help='Duration for which data is collected')
+    parser.add_argument('--num_histogram_bins', type=int, default=32,
+                        help='Number of histogram bins for feature engineering')
+    parser.add_argument('--feature_engineering_flag', type=bool, default=True,
+                        help='Specify whether to perform feature engineering or not')
+    # Parse the arguments
+    args = parser.parse_args()
+    custom_collate_fn = custom_collator(args=args)
+    
+    trainloader = torch.utils.data.DataLoader(
+            dataset_c,
+            num_workers=0,
+            batch_size=10,
+            collate_fn=custom_collate_fn,
+            shuffle=False)
+    
+    trainIter = iter(trainloader)
+    batch_tensor, batch_labels, batch_paths = next(trainIter)
+    print(f"batch_tensor.shape: {batch_tensor.shape} | batch_labels: {batch_labels} | batch_paths: {batch_paths}")
+    
+    Nch, _, length = batch_tensor.shape
+
+    fig, axs = plt.subplots(Nch, 1, figsize=(10, 5*Nch))
+
+    for i in range(Nch):
+        axs[i].plot(batch_tensor[i, 0, :])
+        axs[i].set_title('Channel {}'.format(i))
+
+    plt.savefig('test2.png')
+
+    # # ###################################################################################
+    
+    
+    # ######################### Generating hash list for software AV comparison #########################
+    # saveHashList_flag = True
+    # generate_apk_list_for_software_AV_comparison(dataset_name = "std-dataset", saveHashList_flag=saveHashList_flag)
+    # generate_apk_list_for_software_AV_comparison(dataset_name = "cdyear1-dataset", saveHashList_flag=saveHashList_flag)
+    # generate_apk_list_for_software_AV_comparison(dataset_name = "cdyear2-dataset", saveHashList_flag=saveHashList_flag)
+    # generate_apk_list_for_software_AV_comparison(dataset_name = "cdyear3-dataset", saveHashList_flag=saveHashList_flag)
+    # ###################################################################################################
     
     
     
