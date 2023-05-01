@@ -431,6 +431,8 @@ class dataset_split_generator:
             - base_location : Location of the base folder. See the directory structure in create_matched_lists()
         Output:
             - Partition and partition labels for classification: (HPC_partition_for_HPC_individual,HPC_partition_labels_for_HPC_individual)
+                        -> HPC_partition_for_HPC_individual: [HPC_partition_for_HPC_individual_with_rn1, HPC_partition_for_HPC_individual_with_rn2, ...rn3, ...rn4]
+                        -> HPC_partition_labels_for_HPC_individual: [HPC_partition_labels_for_HPC_individual_with_rn1, HPC_partition_labels_for_HPC_individual_with_rn2, ...rn3, ...rn4]
                                                                 
         NOTE: Depending on the dataset type, certain partitions or labels will be empty. So you need to check for that in your code down the line.
         """
@@ -505,7 +507,7 @@ class dataset_generator_downloader:
             - filter_values : Filter values for the logcat files
                             Format : [runtime_per_file, num_logcat_lines_per_file, freq_logcat_event_per_file]
             - dataset_name : Name of dataset that you want to create
-                            Can take one of the following values : ["std-dataset","cdyear1-dataset","cdyear2-dataset","cdyear3-dataset","bench-dataset"]
+                            Can take one of the following values : ["std-dataset","cdyear1-dataset","cdyear2-dataset","cdyear3-dataset"]
             
         """
         self.filter_values = filter_values

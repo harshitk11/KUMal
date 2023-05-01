@@ -96,7 +96,7 @@ class dataloader_generator:
             - partition_dict : {'train' : [file_path1, file_path2, ..],
                                 'test' : [file_path1, file_path2]}
             - labels : {file_path1 : 1, file_path2: 0, ...}
-            - dataset_type : Type of dataset. Can take one of the following values: {"std-dataset","bench-dataset","cd-dataset"}
+            - dataset_type : Type of dataset. Can take one of the following values: {"std-dataset","cd-dataset"}
             - args :  arguments from the config file
 
         Output: 
@@ -121,23 +121,22 @@ class dataloader_generator:
         return {'trainloader': trainloader, 'testloader': testloader}
     
     @staticmethod
-    def get_dataloader_for_all_classification_tasks(all_dataset_partitionDict_label, dataset_type, args):
+    def get_dataloader_for_all_classification_tasks(HPC_partitions_and_labels_for_all_rn, dataset_type, args):
         """
         Generates the dataloader for all the classification tasks.
         NOTE: args.truncated_duration is used to truncate the timeseries. If you want truncated time series, then args.truncated_duration
               needs to be changed before calling this method.
 
         params:
-            - all_dataset_partitionDict_label: 
-                                                [
-                                                (HPC_partition_for_HPC_individual,HPC_partition_labels_for_HPC_individual),
-                                                ]
-                                        
-                                                partition -> {'train' : [file_path1, file_path2, ..],
-                                                                'trainSG' : [file_path1, file_path2, ..],
-                                                                'test' : [file_path1, file_path2]}
+            - HPC_partitions_and_labels_for_all_rn: [HPC_partition_for_HPC_individual,HPC_partition_labels_for_HPC_individual]
+                        
+                        -> HPC_partition_for_HPC_individual: [HPC_partition_for_HPC_individual_with_rn1, HPC_partition_for_HPC_individual_with_rn2, ...rn3, ...rn4]
+                        -> HPC_partition_labels_for_HPC_individual: [HPC_partition_labels_for_HPC_individual_with_rn1, HPC_partition_labels_for_HPC_individual_with_rn2, ...rn3, ...rn4]
+                               
+                                partition -> {'train' : [file_path1, file_path2, ..],
+                                                'test' : [file_path1, file_path2]}
 
-                                                labels -> {file_path1 : 0, file_path2: 1, ...}        [Benigns have label 0 and Malware have label 1]
+                                labels -> {file_path1 : 0, file_path2: 1, ...}        [Benigns have label 0 and Malware have label 1]
             
             - dataset_type: Can take one of the following values {'std-dataset','bench-dataset','cd-dataset'}. 
                             Based on the dataset type we will activate different partitions ("train", "trainSG", "test") for the different classification tasks.
@@ -145,79 +144,41 @@ class dataloader_generator:
             - args: easydict storing the arguments for the experiment
 
         Output:
-            - dataloaderAllClfToi =
-                        {
-                            'DVFS_partition_for_HPC_DVFS_fusion':{
-                                                                    'rn1':{'trainloader': trainloader, 'trainSGloader': trainSGloader, 'testloader': testloader},
-                                                                    'rn2':{'trainloader': trainloader, 'trainSGloader': trainSGloader, 'testloader': testloader},
-                                                                    'rn3':{'trainloader': trainloader, 'trainSGloader': trainSGloader, 'testloader': testloader},
-                                                                    'rn4':{'trainloader': trainloader, 'trainSGloader': trainSGloader, 'testloader': testloader}
-                                                                    },
-                            'HPC_partition_for_HPC_DVFS_fusion':{
-                                                                    'rn1':{'trainloader': trainloader, 'trainSGloader': trainSGloader, 'testloader': testloader},
-                                                                    'rn2':{'trainloader': trainloader, 'trainSGloader': trainSGloader, 'testloader': testloader},
-                                                                    'rn3':{'trainloader': trainloader, 'trainSGloader': trainSGloader, 'testloader': testloader},
-                                                                    'rn4':{'trainloader': trainloader, 'trainSGloader': trainSGloader, 'testloader': testloader}
-                                                                    },
-                            'HPC_individual':                   {
-                                                                    'rn1':{'trainloader': trainloader, 'trainSGloader': trainSGloader, 'testloader': testloader},
-                                                                    'rn2':{'trainloader': trainloader, 'trainSGloader': trainSGloader, 'testloader': testloader},
-                                                                    'rn3':{'trainloader': trainloader, 'trainSGloader': trainSGloader, 'testloader': testloader},
-                                                                    'rn4':{'trainloader': trainloader, 'trainSGloader': trainSGloader, 'testloader': testloader}
-                                                                    },
-                            'DVFS_individual' :                 {
-                                                                    'all':{'trainloader': trainloader, 'trainSGloader': trainSGloader, 'testloader': testloader}
-                                                                    },
-                            'DVFS_fusion' :                     {
-                                                                    'all':{'trainloader': trainloader, 'trainSGloader': trainSGloader, 'testloader': testloader}
-                                                                    }
-                        }
+            - dataloader_all_rn =
+                                    {        
+                                        'rn1':{'trainloader': trainloader, 'testloader': testloader},
+                                        'rn2':{'trainloader': trainloader, 'testloader': testloader},
+                                        'rn3':{'trainloader': trainloader, 'testloader': testloader},
+                                        'rn4':{'trainloader': trainloader, 'testloader': testloader}
+                                    }
                     NOTE: If the dataloader for a particular task is not required, then it is None.
         """
-        # For selecting the dataset partition, labels, and file_type of the dataset_of_interest in all_datasets
+        # For selecting the dataset partition and labels
         select_dataset = {
-                        'DVFS_partition_for_HPC_DVFS_fusion' : {'rn1':{'partition':all_dataset_partitionDict_label[0][0][0],'label':all_dataset_partitionDict_label[0][1][0],'file_type':'dvfs'},
-                                                                'rn2':{'partition':all_dataset_partitionDict_label[0][0][1],'label':all_dataset_partitionDict_label[0][1][1],'file_type':'dvfs'},
-                                                                'rn3':{'partition':all_dataset_partitionDict_label[0][0][2],'label':all_dataset_partitionDict_label[0][1][2],'file_type':'dvfs'},
-                                                                'rn4':{'partition':all_dataset_partitionDict_label[0][0][3],'label':all_dataset_partitionDict_label[0][1][3],'file_type':'dvfs'}},
-
-                        'HPC_partition_for_HPC_DVFS_fusion' :  {'rn1':{'partition':all_dataset_partitionDict_label[1][0][0],'label':all_dataset_partitionDict_label[1][1][0],'file_type':'simpleperf'},
-                                                                'rn2':{'partition':all_dataset_partitionDict_label[1][0][1],'label':all_dataset_partitionDict_label[1][1][1],'file_type':'simpleperf'},
-                                                                'rn3':{'partition':all_dataset_partitionDict_label[1][0][2],'label':all_dataset_partitionDict_label[1][1][2],'file_type':'simpleperf'},
-                                                                'rn4':{'partition':all_dataset_partitionDict_label[1][0][3],'label':all_dataset_partitionDict_label[1][1][3],'file_type':'simpleperf'}},
-
-                        'HPC_individual' :                     {'rn1':{'partition':all_dataset_partitionDict_label[2][0][0],'label':all_dataset_partitionDict_label[2][1][0],'file_type':'simpleperf'},
-                                                                'rn2':{'partition':all_dataset_partitionDict_label[2][0][1],'label':all_dataset_partitionDict_label[2][1][1],'file_type':'simpleperf'},
-                                                                'rn3':{'partition':all_dataset_partitionDict_label[2][0][2],'label':all_dataset_partitionDict_label[2][1][2],'file_type':'simpleperf'},
-                                                                'rn4':{'partition':all_dataset_partitionDict_label[2][0][3],'label':all_dataset_partitionDict_label[2][1][3],'file_type':'simpleperf'}},
-
-                        'DVFS_individual' :                    {'all':{'partition':all_dataset_partitionDict_label[3][0],'label':all_dataset_partitionDict_label[3][1],'file_type':'dvfs'}},
-
-                        'DVFS_fusion' :                        {'all':{'partition':all_dataset_partitionDict_label[4][0],'label':all_dataset_partitionDict_label[4][1],'file_type':'dvfs'}}
+                            'rn1':{'partition':HPC_partitions_and_labels_for_all_rn[0][0],'label':HPC_partitions_and_labels_for_all_rn[1][0]},
+                            'rn2':{'partition':HPC_partitions_and_labels_for_all_rn[0][1],'label':HPC_partitions_and_labels_for_all_rn[1][1]},
+                            'rn3':{'partition':HPC_partitions_and_labels_for_all_rn[0][2],'label':HPC_partitions_and_labels_for_all_rn[1][2]},
+                            'rn4':{'partition':HPC_partitions_and_labels_for_all_rn[0][3],'label':HPC_partitions_and_labels_for_all_rn[1][3]}
                         }
         
         print(f"\t************ Details of dataloader generation for dataset name : {dataset_type} ***************")
         # Get the dataloader for all the classification toi
-        dataloaderAllClfToi = {}
-        for clf_toi, partition_bin_details in select_dataset.items():
-            dataloaderAllClfToi[clf_toi] = {}
-            for rnBin, partitionDetails in partition_bin_details.items(): 
-                dataloaderAllClfToi[clf_toi][rnBin] = dataloader_generator.prepare_dataloader(partition_dict = partitionDetails['partition'], 
-                                                                                            labels = partitionDetails['label'], 
-                                                                                            file_type = partitionDetails['file_type'], 
-                                                                                            dataset_type = dataset_type, 
-                                                                                            clf_toi = clf_toi, 
-                                                                                            args = args)
-                # if partitionDetails['partition'] is not None:
-                #     print(clf_toi,rnBin)
-                #     for partitionName, partitionDet in partitionDetails['partition'].items():
-                #         try:
-                #             print(f"{partitionName} -> {len(partitionDet)}")
-                #         except:
-                #             print(f"{partitionName} -> {None}")
+        dataloader_all_rn = {}
+        for rnBin, partitionDetails in select_dataset.items(): 
+            dataloader_all_rn[rnBin] = dataloader_generator.prepare_dataloader(partition_dict = partitionDetails['partition'], 
+                                                                                        labels = partitionDetails['label'], 
+                                                                                        dataset_type = dataset_type, 
+                                                                                        args = args)
+            # if partitionDetails['partition'] is not None:
+            #     print(clf_toi,rnBin)
+            #     for partitionName, partitionDet in partitionDetails['partition'].items():
+            #         try:
+            #             print(f"{partitionName} -> {len(partitionDet)}")
+            #         except:
+            #             print(f"{partitionName} -> {None}")
 
         # ################################################################ Testing the supervised learning dataloader ################################################################
-        # iter_loader = iter(dataloaderAllClfToi['DVFS_fusion']['all']['testloader'])
+        # iter_loader = iter(dataloader_all_rn['DVFS_fusion']['all']['testloader'])
         # batch_spec_tensor, labels, f_paths = next(iter_loader)
         # f_paths = "\n - ".join(f_paths)
         # print(f"- Shape of batch tensor (B,N_ch,reduced_feature_size) : {batch_spec_tensor.shape}")
@@ -225,7 +186,7 @@ class dataloader_generator:
         # print(f"- File Paths : {f_paths}")
         # exit()
 
-        # iter_loader = iter(dataloaderAllClfToi['HPC_individual']['rn1']['trainloader'])
+        # iter_loader = iter(dataloader_all_rn['HPC_individual']['rn1']['trainloader'])
         # batch_spec_tensor, labels, f_paths = next(iter_loader)
         # f_paths = "\n - ".join(f_paths)
         # print(f"- Shape of batch tensor (B,N_ch,reduced_feature_size) : {batch_spec_tensor.shape}")
@@ -235,39 +196,40 @@ class dataloader_generator:
 
         # # Testing the alignment of DVFS and HPC for HPC-DVFS fusion
         # # HPC
-        # iter_testloader_hpc = iter(dataloaderAllClfToi['HPC_partition_for_HPC_DVFS_fusion']['rn2']['trainSGloader'])
+        # iter_testloader_hpc = iter(dataloader_all_rn['HPC_partition_for_HPC_DVFS_fusion']['rn2']['trainSGloader'])
         # batch_spec_tensor_hpc, labels_hpc, f_paths_hpc = next(iter_testloader_hpc)
         # # DVFS
-        # iter_testloader_dvfs = iter(dataloaderAllClfToi['DVFS_partition_for_HPC_DVFS_fusion']['rn2']['trainSGloader'])
+        # iter_testloader_dvfs = iter(dataloader_all_rn['DVFS_partition_for_HPC_DVFS_fusion']['rn2']['trainSGloader'])
         # batch_spec_tensor_dvfs, labels_dvfs, f_paths_dvfs = next(iter_testloader_dvfs)
         # for i,j in zip(f_paths_dvfs,f_paths_hpc):
         #     print(f"-- {i,j}")
         # exit()
         ###############################################################################################################################################################################
-        return dataloaderAllClfToi
+        return dataloader_all_rn
         
 class feature_engineered_dataset:
     """
     Class containing all the methods for creating the feature engineered datasets for HPC and GLOBL channels.
     """
-    def __init__(self, args, all_dataset_partitionDict_label, dataset_type, results_path) -> None:
+    def __init__(self, args, HPC_partitions_and_labels_for_all_rn, dataset_type, results_path) -> None:
         """
         params:
-            - all_dataset_partitionDict_label: 
-                                                    [(HPC_partition_for_HPC_individual,HPC_partition_labels_for_HPC_individual)]
-                                            
-                                                    partition -> {'train' : [file_path1, file_path2, ..],
-                                                                    'trainSG' : [file_path1, file_path2, ..],
-                                                                    'test' : [file_path1, file_path2]}
+            - HPC_partitions_and_labels_for_all_rn: [HPC_partition_for_HPC_individual,HPC_partition_labels_for_HPC_individual]
+                        
+                        -> HPC_partition_for_HPC_individual: [HPC_partition_for_HPC_individual_with_rn1, HPC_partition_for_HPC_individual_with_rn2, ...rn3, ...rn4]
+                        -> HPC_partition_labels_for_HPC_individual: [HPC_partition_labels_for_HPC_individual_with_rn1, HPC_partition_labels_for_HPC_individual_with_rn2, ...rn3, ...rn4]
+                               
+                                partition -> {'train' : [file_path1, file_path2, ..],
+                                                'test' : [file_path1, file_path2]}
 
-                                                    labels -> {file_path1 : 0, file_path2: 1, ...}        [Benigns have label 0 and Malware have label 1]
+                                labels -> {file_path1 : 0, file_path2: 1, ...}        [Benigns have label 0 and Malware have label 1]
                 
             - dataset_type: Can take one of the following values {'std-dataset','bench-dataset','cd-dataset'}. 
                             Based on the dataset type we will activate different partitions ("train", "test") for the different classification tasks.
             - results_path: Location of the base folder where all the feature engineered datasets are stored.    
         """
         self.args = args
-        self.all_dataset_partitionDict_label = all_dataset_partitionDict_label
+        self.HPC_partitions_and_labels_for_all_rn = HPC_partitions_and_labels_for_all_rn
         self.dataset_type = dataset_type
         self.results_path = results_path
         
@@ -349,12 +311,13 @@ class feature_engineered_dataset:
         ############################ Log the info about this dataset ############################
         # Count the number of apks from the shortlisted files (This is the number of apks post logcat filter)
         num_benign,num_malware = dataset_generator_instance.count_number_of_apks()
-        numApp_info_dict[args.dataset_name][args.runtime_per_file] = {"NumBenignAPK":num_benign, "NumMalwareAPK":num_malware, "logcatRuntimeThreshold": args.runtime_per_file, "dataset_name":args.dataset_name}
+        numApp_info_dict[args.dataset_name][args.runtime_per_file] = {"NumBenignAPK":num_benign, "NumMalwareAPK":num_malware, "logcatRuntimeThreshold": args.runtime_per_file}
 
-        with open(os.path.join(args.run_dir, "dataset_info.json"),'w') as fp:
+        PATH_dataset_info_num_apk = os.path.join(xmd_base_folder_location,"res","featureEngineeredDatasetDetails", "dataset_info_num_apk.json")
+        with open(PATH_dataset_info_num_apk,'w') as fp:
             json.dump(numApp_info_dict,fp, indent=2)
         #########################################################################################
-
+        
         return numApp_info_dict
 
 
@@ -380,13 +343,19 @@ class feature_engineered_dataset:
         """
         if not os.path.isdir(os.path.join(xmd_base_folder_location,"res","featureEngineeredDatasetDetails")):
             os.mkdir(os.path.join(xmd_base_folder_location,"res","featureEngineeredDatasetDetails"))
-
         
         # Generate a list of the logcat-runtime_per_file values i.e. the iterations that we are downloading has the apks running atleast logcat-runtime_per_file seconds.
         logcat_rtimeThreshold_list = [i for i in range(0, args.collected_duration, args.step_size_logcat_runtimeThreshold)]
 
-        # For storing the info about the number of benign and malware apks in the filtered dataset
-        numApp_info_dict = {args.dataset_name:{}}
+        # Load the json file containing the info about the number of benign and malware apks in the filtered dataset
+        PATH_dataset_info_num_apk = os.path.join(xmd_base_folder_location,"res","featureEngineeredDatasetDetails", "dataset_info_num_apk.json")
+        if os.path.isfile(PATH_dataset_info_num_apk):
+            with open(PATH_dataset_info_num_apk,'r') as fp:
+                numApp_info_dict = json.load(fp)
+            if args.dataset_name not in numApp_info_dict.keys():
+                numApp_info_dict[args.dataset_name] = {}
+        else:
+            numApp_info_dict = {args.dataset_name:{}}
         
         for logcatRtimeThreshold in logcat_rtimeThreshold_list:
             # Set the runtime threshold which is used by dataset_generator_downloader
@@ -410,7 +379,7 @@ class feature_engineered_dataset:
             ################################################## Generate feature engineered dataset for all truncated durations ##################################################
             featEngDatsetBasePath = os.path.join(xmd_base_folder_location,"data",featEngineerDatasetFolderName,args.dataset_name)
             featEngineeringDriver = feature_engineered_dataset(args=args, 
-                                                        all_dataset_partitionDict_label = HPC_partitions_and_labels_for_all_rn, 
+                                                        HPC_partitions_and_labels_for_all_rn = HPC_partitions_and_labels_for_all_rn, 
                                                         dataset_type = dsGen_dataset_type, 
                                                         results_path = featEngDatsetBasePath)
             featEngineeringDriver.generate_feature_engineered_dataset_per_logcat_filter()
@@ -436,31 +405,29 @@ class feature_engineered_dataset:
         # Set the truncated duration in the args
         self.args.truncated_duration = truncated_duration
         # Generate the dataloaders for all the classification tasks
-        dataloaderAllClfToi = dataloader_generator.get_dataloader_for_all_classification_tasks(all_dataset_partitionDict_label = self.all_dataset_partitionDict_label, 
+        dataloader_all_rn = dataloader_generator.get_dataloader_for_all_classification_tasks(HPC_partitions_and_labels_for_all_rn = self.HPC_partitions_and_labels_for_all_rn, 
                                                                                         dataset_type=self.dataset_type, 
                                                                                         args=self.args)
     
-        # For all clf_toi, generate the feature engineered vectors.
-        for clf_toi, rn_bin_details in dataloaderAllClfToi.items():
-            for rnBin, dataloaderDict in rn_bin_details.items():
-                for dataloaderName, dataloaderX in dataloaderDict.items():
-                    if dataloaderX is not None:
-                        # Generate the feature engineered dataset
-                        splitName = dataloaderName.replace("loader","")
-                        print(f"Generating channel bins for : {clf_toi, rnBin, splitName}")
-                        try:
-                            print(f" - Number of samples : {len(dataloaderX.dataset)} | Number of batches: {len(dataloaderX)}")
-                            # continue
-                        except:
-                            print("error in printing length")
+        # Generate feature engineered vectors
+        for rnBin, dataloaderDict in dataloader_all_rn.items():
+            for dataloaderName, dataloaderX in dataloaderDict.items():
+                if dataloaderX is not None:
+                    # Generate the feature engineered dataset
+                    splitName = dataloaderName.replace("loader","")
+                    print(f"Generating channel bins for : {rnBin, splitName}")
+                    try:
+                        print(f" - Number of samples : {len(dataloaderX.dataset)} | Number of batches: {len(dataloaderX)}")
+                        # continue
+                    except:
+                        print("error in printing length")
 
-                        fpathList = self.create_channel_bins(dataloaderX=dataloaderX,
-                                                truncated_duration= self.args.truncated_duration,
-                                                clf_toi=clf_toi,
-                                                rnBin=rnBin,
-                                                split_type=splitName) 
+                    self.create_channel_bins(dataloaderX=dataloaderX,
+                                            truncated_duration= self.args.truncated_duration,
+                                            rnBin=rnBin,
+                                            split_type=splitName) 
                        
-    def create_channel_bins(self, dataloaderX, truncated_duration, clf_toi, rnBin, split_type):
+    def create_channel_bins(self, dataloaderX, truncated_duration, rnBin, split_type):
         """
         Creates the dataset (post feature engineering) for the different classification tasks. 
         Writes the dataset, corresponding labels, and file paths to npy files.
@@ -474,9 +441,8 @@ class feature_engineered_dataset:
             ----------------------------- Used for labelling the output files ----------------------------- 
             - self.logcat_filter_rtime_threshold
             - truncated_duration: time to which you want to trim the time series (in s)           
-            - clf_toi : classification task of interest - "DVFS_partition_for_HPC_DVFS_fusion", "HPC_partition_for_HPC_DVFS_fusion", "HPC_individual", "DVFS_individual", or "DVFS_fusion"
-            - rnBin : "rn1","rn2","rn3","rn4", or "all"
-            - split_type : "train","trainSG", or "test" 
+            - rnBin : "rn1","rn2","rn3","rn4"
+            - split_type : "train" or "test" 
             -----------------------------------------------------------------------------------------------
             
         Output:
@@ -491,13 +457,7 @@ class feature_engineered_dataset:
         # Determine the number of channels [=15 for GLOBL, and =1 for HPC]
         test_channel_bins,_,_ = next(iter(dataloaderX))
         _,num_channel_bins,_ = test_channel_bins.shape
-        
-        # import traceback
-        # try:
-        #     print(f" -  Number of batches : {sum(1 for _ in iter(dataloaderX))}")
-        # except RuntimeError:
-        #     traceback.print_exc()
-        
+         
         channel_bins = [[] for _ in range(num_channel_bins)] # Stores the reduced_feature of each channel
         labels = [] # Stores the labels of the corresponding index in the channel_bins
         f_paths = [] # Stores the file paths of the corresponding index in the channel_bins
@@ -551,7 +511,7 @@ class feature_engineered_dataset:
 
         ############################################# Saving the files #############################################
         # Generate the paths for saving the files
-        saveDir = os.path.join(self.results_path, str(self.logcat_filter_rtime_threshold), str(truncated_duration), clf_toi, rnBin) 
+        saveDir = os.path.join(self.results_path, str(self.logcat_filter_rtime_threshold), str(truncated_duration), rnBin) 
         if not os.path.isdir(saveDir):
             os.makedirs(saveDir)
 

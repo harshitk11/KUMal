@@ -1,19 +1,19 @@
 #***************************************************** Config parameters for generating the feature engineered dataset from the raw dataset *****************************************************#
 
 ############################################ Parameters for downloading the dataset ############################################
-step_size_logcat_runtimeThreshold: 15                  # Step size for incrementing the logcat runtime threshold before downloading the dataset
+step_size_logcat_runtimeThreshold: 10                  # Step size for incrementing the logcat runtime threshold before downloading the dataset
 # Threshold values for the logcat filter 
 runtime_per_file: 15                                  # Runtime measured by the logcat files [we perform a sweep on this value]
 num_logcat_lines_per_file: 50                         # Number of logcat events in the logcat file 
 freq_logcat_event_per_file: 2                         # Average frequency of the logcat events i.e. number of logcat events per second
 
-dataset_name: 'cdyear3-dataset'                       # Dataset name (Can take one of the following values: {'std-dataset', 'bench-dataset', 'cdyear1-dataset', 'cdyear2-dataset', 'cdyear3-dataset'})
+dataset_name: 'std-dataset'                       # Dataset name (Can take one of the following values: {'std-dataset', 'bench-dataset', 'cdyear1-dataset', 'cdyear2-dataset', 'cdyear3-dataset'})
 dataset_download_flag: True                           # Flag that decides whether or not to download the dataset from Dropbox
 num_download_threads: 30                              # Number of files you want to simultaneuously download
 ################################################################################################################################
 
 ######################################### Parameters for performing late-stage fusion ##########################################
-dataset_base_location: "/hdd_6tb/hkumar64/arm-telemetry/kumal_dataset"            # Base location where all the datasets will be downloaded
+dataset_base_location: "/hdd_6tb/hkumar64/arm-telemetry/kumal_dataset_1"            # Base location where all the datasets will be downloaded
 create_runs_dir: True                                                             # If True, then will create a runs dir to track the experimental run
 seed: 10                                                                           # Random seed to be used for this experiment
 ################################################################################################################################
@@ -23,10 +23,6 @@ num_workers: 20                                       # Number of workers for th
 train_batchsz: 20                                     # Batch size for training
 test_batchsz: 20                                       # Batch size for testing
 
-# Parameters for selecting subset of samples from the dataset [used during testing]
-num_train: 50                                         # Number of training samples to consider
-num_test:  5                                          # Number of testing samples to consider
-
 # Flags for shuffling the train, and test dataset
 train_shuffle: True                                   # Flag for shuffling the training data
 test_shuffle: False                                   # Flag for shuffling the testing data
@@ -34,7 +30,7 @@ test_shuffle: False                                   # Flag for shuffling the t
 
 ################################## Parameters for feature engineering (passed to collate_fn) ###################################
 collected_duration: 90                                # Duration for which the telemetry logs is collected
-step_size_truncated_duration: 15                       # Step size for incrementing the truncated duration
+step_size_truncated_duration: 10                       # Step size for incrementing the truncated duration
 num_histogram_bins: 32                                    # HPC time series is divided into histogram bins. This parameter defines the number of histogram bins.
 ################################################################################################################################
 
