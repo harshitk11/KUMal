@@ -211,7 +211,10 @@ class custom_collator(object):
         
         else:
             # NOTE: This is not a tensor. It is a list of the iterations.
-            batch_tensor = batch_hpc 
+            batch_tensor = [None for _ in batch_hpc]
+            # Perform truncation of the hpc tensor
+            for idx, hpc_iter_tensor in enumerate(batch_hpc):
+                batch_tensor[idx] = self.truncate_hpc_tensor(hpc_iter_tensor) 
 
         return batch_tensor, torch.tensor(batch_labels), batch_paths
 

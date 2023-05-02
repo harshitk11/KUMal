@@ -1,0 +1,49 @@
+{
+  "std-dataset": {
+    "0": {
+      "NumBenignAPK": 930,
+      "NumMalwareAPK": 970,
+      "logcatRuntimeThreshold": 0
+    },
+    "10": {
+      "NumBenignAPK": 868,
+      "NumMalwareAPK": 875,
+      "logcatRuntimeThreshold": 10
+    },
+    "20": {
+      "NumBenignAPK": 828,
+      "NumMalwareAPK": 853,
+      "logcatRuntimeThreshold": 20
+    },
+    "30": {
+      "NumBenignAPK": 806,
+      "NumMalwareAPK": 827,
+      "logcatRuntimeThreshold": 30
+    },
+    "40": {
+      "NumBenignAPK": 769,
+      "NumMalwareAPK": 813,
+      "logcatRuntimeThreshold": 40
+    },
+    "50": {
+      "NumBenignAPK": 753,
+      "NumMalwareAPK": 800,
+      "logcatRuntimeThreshold": 50
+    },
+    "60": {
+      "NumBenignAPK": 723,
+      "NumMalwareAPK": 776,
+      "logcatRuntimeThreshold": 60
+    },
+    "70": {
+      "NumBenignAPK": 611,
+      "NumMalwareAPK": 604,
+      "logcatRuntimeThreshold": 70
+    },
+    "80": {
+      "NumBenignAPK": 482,
+      "NumMalwareAPK": 521,
+      "logcatRuntimeThreshold": 80
+    }
+  }
+}

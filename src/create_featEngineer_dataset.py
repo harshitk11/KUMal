@@ -85,7 +85,6 @@ class dataloader_generator:
 
         return dsGen_dataset_type, dsGem_partition_dist
 
-## TODO: Start refactoring from here. prepare_dataloader() is done but verify once.
     @staticmethod
     def prepare_dataloader(partition_dict, labels, dataset_type, args):
         """ 
@@ -241,7 +240,7 @@ class feature_engineered_dataset:
 
         
     @staticmethod
-    def dataset_download_driver(args, xmd_base_folder_location, numApp_info_dict):
+    def dataset_download_driver(args, xmd_base_folder_location, numApp_info_dict, FolderName_featureEngineeredDatasetDetails):
         """
         Downloads the dataset if it's not already downloaded. Trims the dataset (based on the logcat runtime filter) if downloaded.
         
@@ -258,7 +257,7 @@ class feature_engineered_dataset:
                                                                         base_download_dir=args.dataset_base_location)
 
         # Location where timestamp dict is stored
-        timeStampCandidateLocalPathDict_saveLocation = os.path.join(xmd_base_folder_location,"res","featureEngineeredDatasetDetails",f"timeStampCandidateLocalPathDict_{args.dataset_name}.pkl")
+        timeStampCandidateLocalPathDict_saveLocation = os.path.join(xmd_base_folder_location,"res",FolderName_featureEngineeredDatasetDetails,f"timeStampCandidateLocalPathDict_{args.dataset_name}.pkl")
         
         # ######################################## For debugging ########################################    
         # _,_,candidateLocalPathDict = dataset_generator_instance.generate_dataset_winter(download_file_flag=False, num_download_threads=args.num_download_threads)
@@ -313,7 +312,7 @@ class feature_engineered_dataset:
         num_benign,num_malware = dataset_generator_instance.count_number_of_apks()
         numApp_info_dict[args.dataset_name][args.runtime_per_file] = {"NumBenignAPK":num_benign, "NumMalwareAPK":num_malware, "logcatRuntimeThreshold": args.runtime_per_file}
 
-        PATH_dataset_info_num_apk = os.path.join(xmd_base_folder_location,"res","featureEngineeredDatasetDetails", "dataset_info_num_apk.json")
+        PATH_dataset_info_num_apk = os.path.join(xmd_base_folder_location,"res",FolderName_featureEngineeredDatasetDetails, "dataset_info_num_apk.json")
         with open(PATH_dataset_info_num_apk,'w') as fp:
             json.dump(numApp_info_dict,fp, indent=2)
         #########################################################################################
@@ -322,7 +321,7 @@ class feature_engineered_dataset:
 
 
     @staticmethod
-    def generate_feature_engineered_dataset(args, xmd_base_folder_location, featEngineerDatasetFolderName):
+    def generate_feature_engineered_dataset(args, xmd_base_folder_location, featEngineerDatasetFolderName, FolderName_featureEngineeredDatasetDetails):
         """
         Function to generate the feature engineered dataset by doing a sweep over the two parameters: logcat-runtime_per_file, truncated_duration 
         A new dataset is created for each tuple (logcat-runtime_per_file, truncated_duration).
@@ -341,14 +340,14 @@ class feature_engineered_dataset:
             - xmd_base_folder_location: Base folder of xmd's source code
             - featEngineerDatasetFolderName: Name of the base folder for storing the feature engineered dataset.
         """
-        if not os.path.isdir(os.path.join(xmd_base_folder_location,"res","featureEngineeredDatasetDetails")):
-            os.mkdir(os.path.join(xmd_base_folder_location,"res","featureEngineeredDatasetDetails"))
+        if not os.path.isdir(os.path.join(xmd_base_folder_location,"res",FolderName_featureEngineeredDatasetDetails)):
+            os.mkdir(os.path.join(xmd_base_folder_location,"res",FolderName_featureEngineeredDatasetDetails))
         
         # Generate a list of the logcat-runtime_per_file values i.e. the iterations that we are downloading has the apks running atleast logcat-runtime_per_file seconds.
         logcat_rtimeThreshold_list = [i for i in range(0, args.collected_duration, args.step_size_logcat_runtimeThreshold)]
 
         # Load the json file containing the info about the number of benign and malware apks in the filtered dataset
-        PATH_dataset_info_num_apk = os.path.join(xmd_base_folder_location,"res","featureEngineeredDatasetDetails", "dataset_info_num_apk.json")
+        PATH_dataset_info_num_apk = os.path.join(xmd_base_folder_location,"res",FolderName_featureEngineeredDatasetDetails, "dataset_info_num_apk.json")
         if os.path.isfile(PATH_dataset_info_num_apk):
             with open(PATH_dataset_info_num_apk,'r') as fp:
                 numApp_info_dict = json.load(fp)
@@ -365,7 +364,8 @@ class feature_engineered_dataset:
             if args.dataset_download_flag:
                 numApp_info_dict = feature_engineered_dataset.dataset_download_driver(args=args, 
                                                                     xmd_base_folder_location=xmd_base_folder_location, 
-                                                                    numApp_info_dict = numApp_info_dict)
+                                                                    numApp_info_dict = numApp_info_dict,
+                                                                    FolderName_featureEngineeredDatasetDetails=FolderName_featureEngineeredDatasetDetails)
 
             # Get the dataset type and the partition dist for the dataset split generator
             dsGen_dataset_type, dsGem_partition_dist = dataloader_generator.get_dataset_type_and_partition_dist(dataset_name= args.dataset_name)
@@ -546,8 +546,9 @@ def main_worker(args, xmd_base_folder_location):
         - xmd_base_folder_location: Location of base folder of xmd
     """
     # Generate the feature engineered dataset for all logcat runtime thresholds and truncated durations for this dataset.
-    feature_engineered_dataset.generate_feature_engineered_dataset(args, xmd_base_folder_location, featEngineerDatasetFolderName="featureEngineeredDataset_KuMAL")
-
+    feature_engineered_dataset.generate_feature_engineered_dataset(args, xmd_base_folder_location, 
+                                                                   featEngineerDatasetFolderName="featureEngineeredDataset", 
+                                                                   FolderName_featureEngineeredDatasetDetails="featureEngineeredDataset_details")
 
 def main():
     ############################################## Setting up the experimental parameters ##############################################

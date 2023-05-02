@@ -367,7 +367,7 @@ class analyse_parser_info_dict:
         # Path where the parser info logs are stored
         self.parser_info_dir = os.path.join(base_dir.replace("/src",""),"res/parser_info_files/kumal")
         # Path where the plots are stored
-        self.output_dir_plots = os.path.join(base_dir.replace("/src",""),"plots/dataset_characterization/kumal")
+        self.output_dir_plots = os.path.join(base_dir.replace("/src",""),"plots/dataset_characterization/runtime_distribution")
 
         if not os.path.isdir(self.output_dir_plots):
             os.system(f"mkdir -p {self.output_dir_plots}")
