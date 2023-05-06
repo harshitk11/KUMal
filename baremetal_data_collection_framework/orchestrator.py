@@ -864,25 +864,6 @@ def main():
 	# Dict storing the type of dataset, path of the directory storing the apks of the dataset, and flag for whether the directory contains malware
 	app_dir = {
 		
-		############################################## ---------- USENIX summer submission ---------- ##############################################
-        
-		## Malware samples for the std-dataset
-		# "android_zoo_malware_all_rerun":['/home/harshit/research/androidzoo/androidzoo_malwares/all/',1]
-		
-        ## Benign samples for the std-dataset 
-		# "android_zoo_benign_with_reboot":['/home/harshit/research/androidzoo/androidzoo_benign/apps_benign_with_reboot/',0]
-
-        ## Benchmark samples for the bench-dataset
-        # "benchmark_benign_with_reboot":["/home/harshit/research/androidzoo/benchmark/",0]
-
-        ## Malware samples for the cd-dataset
-        # "android_zoo_unknown_malware":['/home/harshit/research/androidzoo/unknown_malware/apps_vt_detect_10_to_15/',1]
-
-        ## Benign samples for the cd-dataset
-        # "android_zoo_unknown_benign":['/home/harshit/research/androidzoo/unknown_benign/ben_apps_vt_detect_0_to_0/apps_vt_detect_0_to_0/', 0]
-		############################################################################################################################################
-
-		############################################## ---------- USENIX winter submission ---------- ##############################################
 		## Benign samples for the std-dataset 
 		"std_benign":['/home/harshit/research/androidzoo/usenix/std_benign/',0]
 

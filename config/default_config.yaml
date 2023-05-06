@@ -7,14 +7,14 @@ runtime_per_file: 15                                  # Runtime measured by the 
 num_logcat_lines_per_file: 0                         # Number of logcat events in the logcat file 
 freq_logcat_event_per_file: 0                         # Average frequency of the logcat events i.e. number of logcat events per second
 
-dataset_name: 'std-dataset'                       # Dataset name (Can take one of the following values: {'std-dataset', 'cdyear1-dataset', 'cdyear2-dataset', 'cdyear3-dataset'})
+dataset_name: 'cdyear2-dataset'                       # Dataset name (Can take one of the following values: {'std-dataset', 'cdyear1-dataset', 'cdyear2-dataset', 'cdyear3-dataset'})
 dataset_download_flag: True                           # Flag that decides whether or not to download the dataset from Dropbox
 num_download_threads: 30                              # Number of files you want to simultaneuously download
 ################################################################################################################################
 
 ######################################### Parameters for performing late-stage fusion ##########################################
 dataset_base_location: "/hdd_6tb/hkumar64/arm-telemetry/kumal_dataset"            # Base location where all the datasets will be downloaded
-create_runs_dir: True                                                             # If True, then will create a runs dir to track the experimental run
+create_runs_dir: False                                                             # If True, then will create a runs dir to track the experimental run
 seed: 10                                                                           # Random seed to be used for this experiment
 ################################################################################################################################
 
@@ -36,6 +36,6 @@ num_histogram_bins: 32                                    # HPC time series is d
 ################################################################################################################################
 
 #********************************************************** Config parameters for training, tuning, and evaluating the ML classifiers ***********************************************************#
-num_cv: 5                                            # Number of cross-validation folds for model tuning
+num_cv: 10                                            # Number of cross-validation folds for model tuning
 num_comb_model_tuning: 20                            # Number of different hyperparameter combinations to try for model tuning
 n_jobs: 40                                            # Number of parallel jobs to run for hyperparameter tuning

@@ -67,33 +67,9 @@ def main():
 	# arg8: Iteration number [to label the file with the iteration]
 	iter_number_perf=iter_number
 
-	#************************* Set of arguments for main_dvfs_channel.py *************************#
-	# arg1 for running the program
-	run_dvfs = run
-	# arg 2 for pulling the output file to laptop
-	adb_pull_dvfs = adb_pull
-	# arg 3 for removing the output file in the phone (to avoid cluttering)
-	remove_dvfs = remove
 	
-	# Directory for dvfs
-	os.system("mkdir -p "+dest_folder+"/"+package_dir_name+"/dvfs")
-	# arg 4 is the destination folder in your computer where the data is to  pulled into
-	dest_folder_dvfs = dest_folder+"/"+package_dir_name+"/dvfs"
-
-	# arg 5 is package_name used for labelling the file
-	package_name_dvfs=package
-
-	# arg 6: Iteration number used for labelling the file
-	iter_number_dvfs = iter_number
-
-	# arg 7: rum_time in sec
-	run_time_dvfs =  run_time
-
-
 	#************************* Runing both the scripts *************************#
 	os.system("python main_simpleperf.py "+run_perf+" "+adb_pull_perf+" "+remove_perf+" "+package_name_perf+" "+dest_folder_perf+" "+samp_time_perf+" "+run_time_perf+" "+iter_number_perf+" &")
-	
-	os.system("python main_dvfs_channel.py "+run_dvfs+" "+adb_pull_dvfs+" "+remove_dvfs+" "+dest_folder_dvfs+" "+package_name_dvfs+" "+iter_number_dvfs+" "+run_time_dvfs+" &")
 	
 
 

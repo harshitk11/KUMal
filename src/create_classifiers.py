@@ -10,8 +10,6 @@ import os
 import shutil
 import numpy as np
 import pickle
-import collections
-import json
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import RandomizedSearchCV
 from sklearn.metrics import classification_report
@@ -27,6 +25,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from prettytable import MSWORD_FRIENDLY
+from scipy.stats import entropy
 
 
 BENIGN_LABEL = 0
@@ -198,8 +197,6 @@ class performanceMetricAggregator:
         else:
             raise ValueError(f"Incorrect performanceMetricDict : {performanceMetricType_}")
 
-    # @staticmethod
-    # drawLinePlot_for_logcatVsThreshold_grid()
 class resample_dataset:
     """
     Contains all the methods for resampling the datasets to achieve the desired malware percentage.
@@ -242,7 +239,7 @@ class resample_dataset:
 
     def resampleBaseTensor(self, X, y):
         """
-        Resamples the Globl/Hpc Tensor.
+        Resamples the Hpc Tensor.
         params:
             - X: dataset (Nchannels, Nsamples, feature_size)
             - y: labels (Nsamples,) 
@@ -279,68 +276,41 @@ class resample_dataset:
 
         return Xlist_res, yList_res
 
-    
-
     @staticmethod
     def unitTestResampler():
-        ########### Testing the individual GLOBL and HPC resampling ###########
-        # Load dataset
-        dfvs_X_train = np.load("/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset/std-dataset/15/40/DVFS_individual/all/channel_bins_train.npy")
-        dfvs_Y_train = np.load("/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset/std-dataset/15/40/DVFS_individual/all/labels_train.npy")
-        print(f"- Shape of the original dataset and labels array: {dfvs_X_train.shape, dfvs_Y_train.shape}")
-        print(f"- [Pre] Number of malware and benign samples : {Counter(dfvs_Y_train)}")
-        # Perform resampling
-        rmInst = resample_dataset(malwarePercent=0.5)
-        X_res, y_res = rmInst.resampleBaseTensor(X=dfvs_X_train, y=dfvs_Y_train)
-        print(f"- Shape of the resampled dataset and labels array: {X_res.shape, y_res.shape}")
-        print(f"- [Post] Number of malware and benign samples : {Counter(y_res)}")
-
-        ########### Testing the fusion GLOBL and HPC resampling ###########
         # Loading the datasets for testing the fusion modules
         hpc_x_test = []
         hpc_y_test = []
-        globl_x_test = []
-        globl_y_test = []
         for group in ["rn1","rn2","rn3","rn4"]:
-            hpc_x_test.append(np.load(f"/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset/cd-dataset/15/40/HPC_partition_for_HPC_DVFS_fusion/{group}/channel_bins_test.npy"))
-            hpc_y_test.append(np.load(f"/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset/cd-dataset/15/40/HPC_partition_for_HPC_DVFS_fusion/{group}/labels_test.npy"))
-            globl_x_test.append(np.load(f"/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset/cd-dataset/15/40/DVFS_partition_for_HPC_DVFS_fusion/{group}/channel_bins_test.npy"))
-            globl_y_test.append(np.load(f"/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset/cd-dataset/15/40/DVFS_partition_for_HPC_DVFS_fusion/{group}/labels_test.npy"))
-
-        XtestGLOBL_HPC= {"globl":globl_x_test, "hpc":hpc_x_test}
-        YtestGLOBL_HPC= {"globl":globl_y_test, "hpc":hpc_y_test}
-    
-        print(" [Pre] Details of HPC and globl matched data")
+            hpc_x_test.append(np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/0/10/{group}/channel_bins_train.npy"))
+            hpc_y_test.append(np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/0/10/{group}/labels_train.npy"))
+      
+        print(" [Pre] Details of HPC data")
         print(f" - Shape of the hpc data and label : {[(dataset.shape,labels.shape) for dataset,labels in zip(hpc_x_test,hpc_y_test)]}")
-        print(f" - Shape of the globl data and label : {[(dataset.shape,labels.shape) for dataset,labels in zip(globl_x_test,globl_y_test)]}")
         print(" - [Pre] Number of malware and benign samples")
-        print([Counter(yxx) for yxx in YtestGLOBL_HPC["globl"]])
-        print([Counter(yxx) for yxx in YtestGLOBL_HPC["hpc"]])
-
-        # Perform resampling
-        XtestGLOBL_HPC_res, YtestGLOBL_HPC_res = rmInst.resampleFusionTensor(XtestGLOBL_HPC=XtestGLOBL_HPC, YtestGLOBL_HPC=YtestGLOBL_HPC)
+        print([Counter(Y) for Y in hpc_y_test])
+        
+        rmInst = resample_dataset(malwarePercent=0.1)
+        hpc_x_test, hpc_y_test = rmInst.resampleHpcTensor(Xlist=hpc_x_test, yList=hpc_y_test)
+        
         print(" -------------------------------------------------------------------------------------------------")
-        print(" [Post] Details of HPC and globl matched data")
-        print(f" - Shape of the hpc data and label : {[(dataset.shape,labels.shape) for dataset,labels in zip(XtestGLOBL_HPC_res['hpc'],YtestGLOBL_HPC_res['hpc'])]}")
-        print(f" - Shape of the globl data and label : {[(dataset.shape,labels.shape) for dataset,labels in zip(XtestGLOBL_HPC_res['globl'],YtestGLOBL_HPC_res['globl'])]}")
-        print(" - [Post] Number of malware and benign samples")
-        print([Counter(yxx) for yxx in YtestGLOBL_HPC_res["globl"]])
-        print([Counter(yxx) for yxx in YtestGLOBL_HPC_res["hpc"]])
-
+        print(" [Post] Details of resampled HPC data")
+        print(f" - Shape of the hpc data and label : {[(dataset.shape,labels.shape) for dataset,labels in zip(hpc_x_test,hpc_y_test)]}")
+        print(" - Number of malware and benign samples")
+        print([Counter(Y) for Y in hpc_y_test])
+        
 
 class baseRFmodel:
     """
-    Object for the base Random Forest model. Tracks the different attributes of the base-classifiers (GLOBL or HPC).
+    Object for the base Random Forest model. Tracks the different attributes of the classifiers.
     Contains all the methods for training, evaluation, saving, and loading the model.
     """
     
-    def __init__(self, args, channelName=None, channelType=None) -> None:
+    def __init__(self, args, channelName=None) -> None:
         # Contains the parameters for training
         self.args = args
         # Channel for which the RF model is created
         self.channelName = channelName
-        # Type of the channel : HPC, GLOBL, or second-stage
-        self.channelType = channelType
         # Hyper parameter grid over which the tuning needs to be performed
         self.hyperparameterGrid = baseRFmodel.generate_hyperparameter_grid()
         
@@ -411,9 +381,17 @@ class baseRFmodel:
                                                    y_pred= predict_labels, 
                                                    output_dict=True)
 
-            test_performance_metric = {'f1': class_results['macro avg']['f1-score'],
+            test_performance_metric = {"summary": {'f1': class_results['macro avg']['f1-score'],
                                         'precision': class_results['macro avg']['precision'],
-                                        'recall': class_results['macro avg']['recall']}
+                                        'recall': class_results['macro avg']['recall']},
+                                       
+                                       "class-1": {'f1': class_results['1']['f1-score'],
+                                        'precision': class_results['1']['precision'],
+                                        'recall': class_results['1']['recall']},
+                                       
+                                       "class-0": {'f1': class_results['0']['f1-score'],
+                                        'precision': class_results['0']['precision'],
+                                        'recall': class_results['0']['recall']}}
 
             if print_performance_metric:
                 # Print the classification report and the confusion matrix
@@ -423,6 +401,44 @@ class baseRFmodel:
 
         return predict_labels, test_performance_metric 
 
+    def eval_uncertainty(self, Xtest, savePath_boxPlot=None):
+        """
+        Generates an uncertainty score for each sample in Xtest.
+                
+        params:
+            - Xtest: dataset (Nsamples, feature_size)
+        
+        Output:
+            - uncertainty_score_np: Uncertainty score for each sample in Xtest (Nsamples,)
+            - predict_proba: Probability of each class for each sample in Xtest (Nsamples,)
+        """
+        ensemble_of_classifiers = self.trainedRFmodel.estimators_
+        num_classifiers = len(ensemble_of_classifiers)
+
+        # Initialize an empty array to store the predictions from all classifiers
+        prediction_array = np.zeros((len(Xtest), num_classifiers))
+
+        # Iterate over each classifier in the ensemble
+        for i, classifier in enumerate(ensemble_of_classifiers):
+            print(f"  - Evaluating classifier {i+1}/{num_classifiers}")
+            predictions = classifier.predict(Xtest)
+            prediction_array[:, i] = predictions
+
+        # Get the probability of each class for each sample
+        histogram_array = np.column_stack((np.sum(prediction_array == 0, axis=1), np.sum(prediction_array == 1, axis=1))) 
+        uncertainty_score_array = entropy(histogram_array, axis=1, base=2)
+        predict_proba = np.mean(prediction_array, axis=1)
+    
+        if savePath_boxPlot:
+            plt.boxplot(predict_proba)
+            plt.xlabel('Samples')
+            plt.ylabel('Uncertainty Score')
+            plt.title('Box Plot of Uncertainty Scores')
+            plt.savefig(savePath_boxPlot, dpi=300)
+            plt.close()
+            
+        return uncertainty_score_array, predict_proba
+         
     def save_model(self, fpath):
         """
         Saves the model and the model details to the specified path.
@@ -432,7 +448,6 @@ class baseRFmodel:
         """
         # Used for saving and loading the object
         model_pickle_file = {"channelName":self.channelName,
-                                "channelType":self.channelType,
                                 "validationScoreList":self.validationScoreList,
                                 "trainedRFmodel":self.trainedRFmodel,  
                                 "bestModelParams":self.bestModelParams}
@@ -453,7 +468,6 @@ class baseRFmodel:
             model_pickle_file = pickle.load(handle)
 
         self.channelName = model_pickle_file["channelName"]
-        self.channelType = model_pickle_file["channelType"]
         self.validationScoreList = model_pickle_file["validationScoreList"]
         self.trainedRFmodel = model_pickle_file["trainedRFmodel"]
         self.bestModelParams = model_pickle_file["bestModelParams"]
@@ -492,34 +506,71 @@ class baseRFmodel:
                     'bootstrap': bootstrap}
         
         return randomGrid
+    
+    @staticmethod    
+    def generate_roc_curve(Ytest, Ypred_proba, fpr_threshold, savePath=None):
+        from sklearn.metrics import roc_curve, auc
+        fpr, tpr, thresholds = roc_curve(Ytest, Ypred_proba)
+        roc_auc = auc(fpr, tpr)
 
+        # Find the threshold closest to the fpr_threshold
+        decision_threshold = thresholds[np.argmin(np.abs(fpr - fpr_threshold))]
+        print([(i,j,k) for i,j,k in zip(fpr, tpr, thresholds)])
+        print(decision_threshold)
+        
+        plt.plot(fpr, tpr, color='teal', lw=2, label='ROC curve (AUC = %0.2f)' % roc_auc)
+        plt.plot([0, 1], [0, 1], color='grey', lw=2, linestyle='--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate', fontsize=12, fontweight='bold')
+        plt.ylabel('True Positive Rate', fontsize=12, fontweight='bold')
+        plt.title('Receiver Operating Characteristic (ROC) Curve', fontsize=14, fontweight='bold')
+        plt.legend(loc='lower right', fontsize=12)
+        plt.tick_params(labelsize=10, width=2, length=5, which='both')
+        plt.grid(True)
+        plt.tight_layout()  # Optional for better spacing between elements
+        
+        if savePath:
+            plt.savefig(savePath, dpi=300)  # Save the figure if needed
+        plt.close()
+        
+        return decision_threshold
+        
     @staticmethod
     def unit_test_baseRFmodel(args):
         """
         unit test for the base RF model object
         """
-        X_train = np.load("/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset/std-dataset/0/15/DVFS_individual/all/channel_bins_train.npy")
-        Y_train = np.load("/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset/std-dataset/0/15/DVFS_individual/all/labels_train.npy")
-
-        X_test = np.load("/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset/cd-dataset/10/15/DVFS_individual/all/channel_bins_test.npy")
-        Y_test = np.load("/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset/cd-dataset/10/15/DVFS_individual/all/labels_test.npy")
+        # Loading the datasets for testing the fusion modules
+        hpc_x_train = np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/10/10/rn1/channel_bins_train.npy")
+        hpc_y_train = np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/10/10/rn1/labels_train.npy")
         
-        print(f" - Shape of the training data and label : {X_train.shape, Y_train.shape}")
-        print(f" - Shape of the test data and label : {X_test.shape, Y_test.shape}")
+        hpc_x_test = np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/80/10/rn1/channel_bins_test.npy")
+        hpc_y_test = np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/80/10/rn1/labels_test.npy")
         
-        print(f" - Training the model -")
-        baseModelInst = baseRFmodel(args=args, channelName="test", channelType="dvfs")
-        baseModelInst.train(Xtrain=X_train[0],Ytrain=Y_train)
+        print(f" - Shape of the training data and label : {hpc_x_train.shape, hpc_y_train.shape}")
+        print(f" - Shape of the test data and label : {hpc_x_test.shape, hpc_y_test.shape}")
+        
+        # print(f" - Training the model -")
+        # baseModelInst = baseRFmodel(args=args, channelName="test")
+        # baseModelInst.train(Xtrain=hpc_x_train[0],Ytrain=hpc_y_train)
 
         # print(f" - Evaluating the model -")
-        # baseModelInst.eval(Xtest=X_test[0],Ytest=Y_test,print_performance_metric=True)
-
+        # _,test_performance_metric = baseModelInst.eval(Xtest=hpc_x_test[0],Ytest=hpc_y_test,print_performance_metric=True)
+        # print(test_performance_metric)
+        
         # print(f" - Saving the model -")
         # baseModelInst.save_model(fpath="testmodel.pkl")
 
-        # print(f" - Loading and testing the model -")
-        # newBaseModelInst = baseRFmodel(args=args)
-        # newBaseModelInst.load_model(fpath="testmodel.pkl")
+        print(f" - Loading and testing the model -")
+        newBaseModelInst = baseRFmodel(args=args)
+        newBaseModelInst.load_model(fpath="testmodel.pkl")
+
+        print(f" - Generate the uncertainty scores -")
+        test_uncertainty, predict_proba = newBaseModelInst.eval_uncertainty(Xtest=hpc_x_test[0], savePath_boxPlot="test.png")
+        print(np.mean(test_uncertainty))
+        
+        baseRFmodel.generate_roc_curve(Ytest=hpc_y_test, Ypred_proba=predict_proba, savePath="test2.png", fpr_threshold=0.2)
         # newBaseModelInst.eval(Xtest=X_test[0],Ytest=Y_test,print_performance_metric=True)
 
 class late_stage_fusion:
@@ -1482,10 +1533,10 @@ def main_worker(args, xmd_base_folder_location):
         - xmd_base_folder_location: Location of base folder of xmd
     """
     # resample_dataset.unitTestResampler()
-    # baseRFmodel.unit_test_baseRFmodel(args=args)
+    baseRFmodel.unit_test_baseRFmodel(args=args)
     # late_stage_fusion.unit_test_lateStageFusion(args=args)
     # featureEngineeredDatasetLoader.unit_test_featureEngineeredDatasetLoader()
-    orchestrator.unit_test_orchestrator(args=args, xmd_base_folder_location= xmd_base_folder_location)
+    # orchestrator.unit_test_orchestrator(args=args, xmd_base_folder_location= xmd_base_folder_location)
 
 
 def main():

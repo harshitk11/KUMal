@@ -35,7 +35,7 @@ res/trainedModels
 res/filesToDelete.txt
 res/hpc_histogram_pkl_files
 config/default_config_copy.yaml
-
+res/featureEngineeredDataset_details
 # Ignore plots
 plots/
 
