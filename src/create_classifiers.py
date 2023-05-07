@@ -33,18 +33,18 @@ from sklearn.metrics import roc_curve, auc
 BENIGN_LABEL = 0
 MALWARE_LABEL = 1
 
-def get_args(xmd_base_folder):
+def get_args(kumal_base_folder_location):
     """
     Reads the config file and returns the config parameters.
     params:
-        - xmd_base_folder: Location of xmd's base folder
+        - kumal_base_folder_location: Location of xmd's base folder
     Output:
 
     """
     parser = argparse.ArgumentParser(description="KUMal: Concept Drift study of Hardware Performance Counter (HPC) based Malware Detectores")
     # Location of the default and the update config files.
-    parser.add_argument('-config_default', type=str, dest='config_default', default=os.path.join(xmd_base_folder,'config','default_config.yaml'), help="File containing the default experimental parameters.")
-    parser.add_argument('-config', type=str, dest='config', default=os.path.join(xmd_base_folder,'config','update_config.yaml'), help="File containing the experimental parameters to update.")
+    parser.add_argument('-config_default', type=str, dest='config_default', default=os.path.join(kumal_base_folder_location,'config','default_config.yaml'), help="File containing the default experimental parameters.")
+    parser.add_argument('-config', type=str, dest='config', default=os.path.join(kumal_base_folder_location,'config','update_config.yaml'), help="File containing the experimental parameters to update.")
     opt = parser.parse_args()
 
     # Create a config object. Initialize the default config parameters from the default config file.
@@ -239,14 +239,15 @@ class resample_dataset:
         _, _ = ros.fit_resample(X, y)
         return ros.sample_indices_
 
-    def resampleBaseTensor(self, X, y):
+    def resampleBaseTensor(self, X, y, filePathList):
         """
         Resamples the Hpc Tensor.
         params:
             - X: dataset (Nchannels, Nsamples, feature_size)
             - y: labels (Nsamples,) 
+            - filePathList: (Nsamples,)
         Output:
-            - X_res, y_res : Resampled dataset
+            - X_res, y_res, filePathList_res : Resampled dataset
         """
         # Get the sampling indices
         sampIndx = self.generate_sampling_indices(X[0], y)
@@ -254,50 +255,57 @@ class resample_dataset:
         # Resample the dataset
         X_res = X[:,sampIndx,:]
         y_res = y[sampIndx]
+        filePathList_res = filePathList[sampIndx]
 
-        return X_res, y_res
+        return X_res, y_res, filePathList_res
 
-    def resampleHpcTensor(self, Xlist, yList):
+    def resampleHpcTensor(self, Xlist, yList, filePathList):
         """
         Resamples the dataset for all the HPC groups.
         
         params:
             - Xlist: [dataset_group1, dataset_group2, dataset_group3, dataset_group4] | dataset shape: (1, Nsamples, feature_size)
             - yList: [labels_group1, labels_group2, labels_group3, labels_group4] | labels_shape: (Nsamples,)
+            - filePathList: [filePath_group1, filePath_group2, filePath_group3, filePath_group4] | filePath_shape: (Nsamples,)
 
         Output:
             - Xlist_res, yList_res : Resampled dataset
         """
         Xlist_res = []
         yList_res = []
+        filePathList_res = []
 
         for grpIndx, _ in enumerate(Xlist):
-            X_res, y_res = self.resampleBaseTensor(X=Xlist[grpIndx], y=yList[grpIndx])
+            X_res, y_res, filePath_res = self.resampleBaseTensor(X=Xlist[grpIndx], y=yList[grpIndx], filePathList=filePathList[grpIndx])
             Xlist_res.append(X_res)
             yList_res.append(y_res)
+            filePathList_res.append(filePath_res)
 
-        return Xlist_res, yList_res
+        return Xlist_res, yList_res, filePathList_res
 
     @staticmethod
     def unitTestResampler():
         # Loading the datasets for testing the resampler
         hpc_x_test = []
         hpc_y_test = []
+        hpc_filePaths_test = []
         for group in ["rn1","rn2","rn3","rn4"]:
             hpc_x_test.append(np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/0/10/{group}/channel_bins_train.npy"))
             hpc_y_test.append(np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/0/10/{group}/labels_train.npy"))
-      
+            with open(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/0/10/{group}/file_paths_train.npy", 'rb') as fp:
+                hpc_filePaths_test.append(np.array(pickle.load(fp), dtype="object"))
+            
         print(" [Pre] Details of HPC data")
-        print(f" - Shape of the hpc data and label : {[(dataset.shape,labels.shape) for dataset,labels in zip(hpc_x_test,hpc_y_test)]}")
+        print(f" - Shape of the (hpc data, label, file_path) : {[(dataset.shape,labels.shape, filePaths.shape) for dataset,labels,filePaths in zip(hpc_x_test,hpc_y_test, hpc_filePaths_test)]}")
         print(" - [Pre] Number of malware and benign samples")
         print([Counter(Y) for Y in hpc_y_test])
         
-        rmInst = resample_dataset(malwarePercent=0.1)
-        hpc_x_test, hpc_y_test = rmInst.resampleHpcTensor(Xlist=hpc_x_test, yList=hpc_y_test)
+        rmInst = resample_dataset(malwarePercent=0.5)
+        hpc_x_test, hpc_y_test, hpc_filePaths_test = rmInst.resampleHpcTensor(Xlist=hpc_x_test, yList=hpc_y_test, filePathList=hpc_filePaths_test)
         
         print(" -------------------------------------------------------------------------------------------------")
         print(" [Post] Details of resampled HPC data")
-        print(f" - Shape of the hpc data and label : {[(dataset.shape,labels.shape) for dataset,labels in zip(hpc_x_test,hpc_y_test)]}")
+        print(f" - Shape of the (hpc data, label, file_path) : {[(dataset.shape,labels.shape, filePaths.shape) for dataset,labels,filePaths in zip(hpc_x_test,hpc_y_test, hpc_filePaths_test)]}")
         print(" - Number of malware and benign samples")
         print([Counter(Y) for Y in hpc_y_test])
         
@@ -851,8 +859,8 @@ class HPC_classifier:
         
         #################### Resampler ####################
         rmInst = resample_dataset(malwarePercent=0.5)
-        hpc_x_train, hpc_y_train = rmInst.resampleHpcTensor(Xlist=hpc_x_train, yList=hpc_y_train)
-        hpc_x_test, hpc_y_test = rmInst.resampleHpcTensor(Xlist=hpc_x_test, yList=hpc_y_test)
+        hpc_x_train, hpc_y_train, hpc_filePaths_train = rmInst.resampleHpcTensor(Xlist=hpc_x_train, yList=hpc_y_train, filePathsList=hpc_filePaths_train)
+        hpc_x_test, hpc_y_test, hpc_filePaths_test= rmInst.resampleHpcTensor(Xlist=hpc_x_test, yList=hpc_y_test, filePathsList=hpc_filePaths_test)
         ###################################################
         
         # Testing the training module
@@ -1038,7 +1046,8 @@ class orchestrator:
         
         ######################################## Resampler ########################################
         rmInst = resample_dataset(malwarePercent=self.malwarePercent)
-        hpc_X_train, hpc_Y_train = rmInst.resampleHpcTensor(Xlist=hpc_X_train, yList=hpc_Y_train)
+        hpc_X_train, hpc_Y_train, hpc_fileList_train = rmInst.resampleHpcTensor(Xlist=hpc_X_train, yList=hpc_Y_train, filePathList=hpc_fileList_train)
+        hpc_X_test, hpc_Y_test, hpc_fileList_test = rmInst.resampleHpcTensor(Xlist=hpc_X_test, yList=hpc_Y_test, filePathList=hpc_fileList_test)
         ###########################################################################################
         
         HPC_classifier_inst = None
@@ -1057,8 +1066,8 @@ class orchestrator:
             ###############################################################################################
             
             # Save the hash list used for training and testing the base classifiers
-            HPC_classifier_inst.baseClassifierTrainFileHashList = HPC_classifier.get_train_test_hashList(file_paths=hpc_fileList_train)
-            HPC_classifier_inst.baseClassifierTestFileHashList = HPC_classifier.get_train_test_hashList(file_paths=hpc_fileList_test)
+            HPC_classifier_inst.baseClassifierTrainFileHashList = HPC_classifier.get_train_test_hashList(file_paths_list_for_all_groups=hpc_fileList_train)
+            HPC_classifier_inst.baseClassifierTestFileHashList = HPC_classifier.get_train_test_hashList(file_paths_list_for_all_groups=hpc_fileList_test)
             
             if print_performance_metric:
                 # Pretty print performance metric
@@ -1102,7 +1111,7 @@ class orchestrator:
             - lateFusionInstance : Instance of the object storing all the update performance evaluation metrics        
         """
         ################################### Load the trained model ###################################
-        savePath = os.path.join(self.xmd_base_folder_location, "res", "trainedModels", "std-dataset")
+        savePath = os.path.join(self.kumal_base_folder_location, "res", "trainedModels", "std-dataset")
         savePath = os.path.join(savePath,f"HPC_Object_logRuntime{trainedModelDetails['logcatRuntimeThreshold']}_truncDuration{trainedModelDetails['truncatedDuration']}_malwarePercent{trainedModelDetails['malwarePercent']}.pkl")
         
         HPC_classifier_inst = HPC_classifier(args=self.args)
@@ -1121,7 +1130,7 @@ class orchestrator:
 
         ######################################## Resampler ########################################
         rmInst = resample_dataset(malwarePercent=self.malwarePercent)
-        hpc_X_test, hpc_Y_test = rmInst.resampleHpcTensor(Xlist=hpc_X_test, yList=hpc_Y_test)
+        hpc_X_test, hpc_Y_test, hpc_fileList_test = rmInst.resampleHpcTensor(Xlist=hpc_X_test, yList=hpc_Y_test, filePathList=hpc_fileList_test)
         ###########################################################################################
 
         ################################### Test the HPC and DVFS base classifiers ###################################
@@ -1130,7 +1139,7 @@ class orchestrator:
         ##############################################################################################################
 
         # Save the hash list used for testing 
-        HPC_classifier_inst.baseClassifierTestFileHashList = HPC_classifier.get_train_test_hashList(file_paths=hpc_fileList_test)
+        HPC_classifier_inst.baseClassifierTestFileHashList = HPC_classifier.get_train_test_hashList(file_paths_list_for_all_groups=hpc_fileList_test)
             
         if print_performance_metric:
             print(f"Summary of performance metrics for dataset : {self.datasetName}, logcatRuntimeThreshold : {logcatRuntimeThreshold}, truncatedDuration : {truncatedDuration}")
@@ -1148,7 +1157,7 @@ class orchestrator:
 
     
 
-    def logcat_runtime_vs_truncated_duration_grid(self, trainStage1, trainStage2, trainedModelDetails = None):
+    def logcat_runtime_vs_truncated_duration_grid(self, trainHPCClassifiers, trainedModelDetails = None):
         """
         Performs a grid search over logcatRuntimeThreshold and truncatedDuration for the following tasks.
             Tasks:
@@ -1158,7 +1167,7 @@ class orchestrator:
                 - For std-dataset, generate late-stage-fusion instances storing the trained models.
             
             params:
-                - trainStage1, trainStage2 (bool) : For std-dataset, if True, then will train the corresponding stage-1 and stage-2 classifiers.
+                - trainHPCClassifiers (bool) : For std-dataset, if True, then will train the corresponding classifiers.
                 - trainedModelDetails (dict) : {"logcatRuntimeThreshold": (int), "truncatedDuration" : (int), "malwarePercent": (float)}
                                                 If this parameter is passed then grid search using the cd-dataset is performed using this trained model.
                                                 Else, the same config trained model is used for testing the corresponding cd-dataset instance.
@@ -1198,14 +1207,13 @@ class orchestrator:
                                 basePath_featureEngineeredDataset=self.basePath_featureEngineeredDataset, 
                                 datasetName=self.datasetName, 
                                 malwarePercent=self.malwarePercent,
-                                xmd_base_folder_location=self.xmd_base_folder_location)
+                                kumal_base_folder_location=self.kumal_base_folder_location)
                     
                     orchInst.std_dataset_tasks(logcatRuntimeThreshold=logcatRuntimeThreshold, 
                                             truncatedDuration=truncatedDuration, 
                                             print_performance_metric=True, 
                                             saveTrainedModels=True,
-                                            trainStage1=trainStage1, 
-                                            trainStage2=trainStage2)                
+                                            trainHPCClassifiers=trainHPCClassifiers)                
         
         else:
             raise ValueError(f"Incomplete arguments : datasetType is {datasetType} and trainedModelDetails is {trainedModelDetails}.")
@@ -1396,9 +1404,45 @@ class orchestrator:
         pass
         
     @staticmethod
-    def unit_test_orchestrator(args, xmd_base_folder_location):
-        basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset1"
-        # basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDatasetWinter"
+    def unit_test_orchestrator(args, kumal_base_folder_location):
+        basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset"
+        
+        # ########################## Testing std-dataset tasks ##########################
+        # orchInst = orchestrator(args=args, 
+        #                         basePath_featureEngineeredDataset=basePath_featureEngineeredDataset, 
+        #                         datasetName="std-dataset", 
+        #                         malwarePercent=0.5,
+        #                         kumal_base_folder_location=kumal_base_folder_location)
+        # orchInst.std_dataset_tasks(logcatRuntimeThreshold=0, truncatedDuration=10, print_performance_metric=True, saveTrainedModels=True, trainHPCClassifiers=True)                
+        # exit()
+        # ##############################################################################
+        
+        # ########################## Testing cd-dataset tasks ###########################
+        # orchInst = orchestrator(args=args, 
+        #                         basePath_featureEngineeredDataset=basePath_featureEngineeredDataset, 
+        #                         datasetName="cdyear1-dataset", 
+        #                         malwarePercent=0.5,
+        #                         kumal_base_folder_location=kumal_base_folder_location)
+        # # Trained model to be used for testing
+        # trainedModelDetails = {"logcatRuntimeThreshold":0, "truncatedDuration":10, "malwarePercent":0.5}
+        # orchInst.cd_dataset_tasks(trainedModelDetails=trainedModelDetails, logcatRuntimeThreshold=0, truncatedDuration=10, print_performance_metric=True, save_HPC_Clf_Object=True)                
+        # exit()
+        # ################################################################################
+        
+        
+        ######################## Testing grid search task ##########################
+        orchInst = orchestrator(args=args, 
+                                basePath_featureEngineeredDataset=basePath_featureEngineeredDataset, 
+                                datasetName="std-dataset", 
+                                malwarePercent=0.5,
+                                kumal_base_folder_location=kumal_base_folder_location)
+        # trainedModelDetails = {"logcatRuntimeThreshold":75, "truncatedDuration":90, "malwarePercent":0.5}
+        trainedModelDetails=None
+        orchInst.logcat_runtime_vs_truncated_duration_grid(trainHPCClassifiers=True,
+                                                            trainedModelDetails=trainedModelDetails) 
+        exit()
+        #############################################################################
+
         ######################### Print the performance metrics of a late stage fusion object ##########################
         # datasetName = "cdyear1-dataset"
         # logcatRuntimeThreshold=0
@@ -1415,41 +1459,8 @@ class orchestrator:
         #                                                         args=args)
         # exit()
         # ###############################################################################################################
-        ########################## Testing std-dataset tasks ##########################
-        # orchInst = orchestrator(args=args, 
-        #                         basePath_featureEngineeredDataset=basePath_featureEngineeredDataset, 
-        #                         datasetName="std-dataset", 
-        #                         malwarePercent=0.5,
-        #                         xmd_base_folder_location=xmd_base_folder_location)
-        # orchInst.std_dataset_tasks(logcatRuntimeThreshold=15, truncatedDuration=30, print_performance_metric=True, saveTrainedModels=True, trainStage1=True, trainStage2=True)                
-        # exit()
-        ##############################################################################
+        
 
-        ########################## Testing cd-dataset tasks ###########################
-        orchInst = orchestrator(args=args, 
-                                basePath_featureEngineeredDataset=basePath_featureEngineeredDataset, 
-                                datasetName="cd-dataset", 
-                                malwarePercent=0.5,
-                                xmd_base_folder_location=xmd_base_folder_location)
-        # Trained model to be used for testing
-        trainedModelDetails = {"logcatRuntimeThreshold":15, "truncatedDuration":30, "malwarePercent":0.5}
-        orchInst.cd_dataset_tasks(trainedModelDetails=trainedModelDetails, logcatRuntimeThreshold=15, truncatedDuration=30, print_performance_metric=True, saveLateStageFusionObject=True)                
-        exit()
-        # ##############################################################################
-
-        ######################## Testing grid search task ##########################
-        # orchInst = orchestrator(args=args, 
-        #                         basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDatasetWinter", 
-        #                         datasetName="cdyear3-dataset", 
-        #                         malwarePercent=0.5,
-        #                         xmd_base_folder_location=xmd_base_folder_location)
-        # trainedModelDetails = {"logcatRuntimeThreshold":75, "truncatedDuration":90, "malwarePercent":0.5}
-        # # trainedModelDetails=None
-        # orchInst.logcat_runtime_vs_truncated_duration_grid(trainStage1=True,
-        #                                                     trainStage2=True, 
-        #                                                     trainedModelDetails=trainedModelDetails) 
-        # exit()
-        #############################################################################
 
         # ########################## Testing performance metric aggregator ########################
         ## To be used as reference for passing arguments
@@ -1527,18 +1538,18 @@ class orchestrator:
 
 
 
-def main_worker(args, xmd_base_folder_location):
+def main_worker(args, kumal_base_folder_location):
     """
     Worker node that performs the complete analysis.
     params:
         - args: easydict storing the experimental parameters
-        - xmd_base_folder_location: Location of base folder of xmd
+        - kumal_base_folder_location: Location of base folder of xmd
     """
     # resample_dataset.unitTestResampler()
     # baseRFmodel.unit_test_baseRFmodel(args=args)
-    HPC_classifier.unit_test_HPC_classifier(args=args)
+    # HPC_classifier.unit_test_HPC_classifier(args=args)
     # featureEngineeredDatasetLoader.unit_test_featureEngineeredDatasetLoader()
-    # orchestrator.unit_test_orchestrator(args=args, xmd_base_folder_location= xmd_base_folder_location)
+    orchestrator.unit_test_orchestrator(args=args, kumal_base_folder_location= kumal_base_folder_location)
 
 
 def main():
@@ -1548,7 +1559,7 @@ def main():
     base_folder_location = os.path.join(dir_path.replace("/src",""),"")
 
     # Get the arguments and the config file object
-    cfg, args = get_args(xmd_base_folder=base_folder_location)
+    cfg, args = get_args(kumal_base_folder_location=base_folder_location)
 
     # Create a runs directory for this run and push the config files for this run in the directory
     args.run_dir = os.path.join(base_folder_location, 'runs', args.timestamp)
@@ -1562,7 +1573,7 @@ def main():
     ####################################################################################################################################
 
     # Start the analysis
-    main_worker(args=args, xmd_base_folder_location= base_folder_location)
+    main_worker(args=args, kumal_base_folder_location= base_folder_location)
 
 if __name__ == '__main__':
     main()
