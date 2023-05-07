@@ -26,6 +26,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from prettytable import MSWORD_FRIENDLY
 from scipy.stats import entropy
+from sklearn.metrics import roc_curve, auc
+
 
 
 BENIGN_LABEL = 0
@@ -39,7 +41,7 @@ def get_args(xmd_base_folder):
     Output:
 
     """
-    parser = argparse.ArgumentParser(description="XMD : Late-stage fusion.")
+    parser = argparse.ArgumentParser(description="KUMal: Concept Drift study of Hardware Performance Counter (HPC) based Malware Detectores")
     # Location of the default and the update config files.
     parser.add_argument('-config_default', type=str, dest='config_default', default=os.path.join(xmd_base_folder,'config','default_config.yaml'), help="File containing the default experimental parameters.")
     parser.add_argument('-config', type=str, dest='config', default=os.path.join(xmd_base_folder,'config','update_config.yaml'), help="File containing the experimental parameters to update.")
@@ -278,7 +280,7 @@ class resample_dataset:
 
     @staticmethod
     def unitTestResampler():
-        # Loading the datasets for testing the fusion modules
+        # Loading the datasets for testing the resampler
         hpc_x_test = []
         hpc_y_test = []
         for group in ["rn1","rn2","rn3","rn4"]:
@@ -380,19 +382,25 @@ class baseRFmodel:
             class_results = classification_report(y_true= Ytest,
                                                    y_pred= predict_labels, 
                                                    output_dict=True)
-
-            test_performance_metric = {"summary": {'f1': class_results['macro avg']['f1-score'],
-                                        'precision': class_results['macro avg']['precision'],
-                                        'recall': class_results['macro avg']['recall']},
+            
+                        
+            test_performance_metric = {"summary": {'f1': round(class_results['macro avg']['f1-score'], 2),
+                                       'precision': round(class_results['macro avg']['precision'], 2),
+                                       'recall': round(class_results['macro avg']['recall'], 2),
+                                       'support': class_results['macro avg']['support']},
                                        
-                                       "class-1": {'f1': class_results['1']['f1-score'],
-                                        'precision': class_results['1']['precision'],
-                                        'recall': class_results['1']['recall']},
+                           "class-1": {'f1': round(class_results['1']['f1-score'], 2),
+                                        'precision': round(class_results['1']['precision'], 2),
+                                        'recall': round(class_results['1']['recall'], 2),
+                                        'support': class_results['1']['support']},
                                        
-                                       "class-0": {'f1': class_results['0']['f1-score'],
-                                        'precision': class_results['0']['precision'],
-                                        'recall': class_results['0']['recall']}}
+                           "class-0": {'f1': round(class_results['0']['f1-score'], 2),
+                                        'precision': round(class_results['0']['precision'], 2),
+                                        'recall': round(class_results['0']['recall'], 2),
+                                        'support': class_results['0']['support']}}
 
+            
+            
             if print_performance_metric:
                 # Print the classification report and the confusion matrix
                 print(f" ----- Evaluation performation metrics -----")
@@ -401,7 +409,7 @@ class baseRFmodel:
 
         return predict_labels, test_performance_metric 
 
-    def eval_uncertainty(self, Xtest, savePath_boxPlot=None):
+    def eval_uncertainty(self, Xtest):
         """
         Generates an uncertainty score for each sample in Xtest.
                 
@@ -420,7 +428,7 @@ class baseRFmodel:
 
         # Iterate over each classifier in the ensemble
         for i, classifier in enumerate(ensemble_of_classifiers):
-            print(f"  - Evaluating classifier {i+1}/{num_classifiers}")
+            # print(f"  - Evaluating classifier {i+1}/{num_classifiers}")
             predictions = classifier.predict(Xtest)
             prediction_array[:, i] = predictions
 
@@ -428,14 +436,6 @@ class baseRFmodel:
         histogram_array = np.column_stack((np.sum(prediction_array == 0, axis=1), np.sum(prediction_array == 1, axis=1))) 
         uncertainty_score_array = entropy(histogram_array, axis=1, base=2)
         predict_proba = np.mean(prediction_array, axis=1)
-    
-        if savePath_boxPlot:
-            plt.boxplot(predict_proba)
-            plt.xlabel('Samples')
-            plt.ylabel('Uncertainty Score')
-            plt.title('Box Plot of Uncertainty Scores')
-            plt.savefig(savePath_boxPlot, dpi=300)
-            plt.close()
             
         return uncertainty_score_array, predict_proba
          
@@ -507,41 +507,14 @@ class baseRFmodel:
         
         return randomGrid
     
-    @staticmethod    
-    def generate_roc_curve(Ytest, Ypred_proba, fpr_threshold, savePath=None):
-        from sklearn.metrics import roc_curve, auc
-        fpr, tpr, thresholds = roc_curve(Ytest, Ypred_proba)
-        roc_auc = auc(fpr, tpr)
-
-        # Find the threshold closest to the fpr_threshold
-        decision_threshold = thresholds[np.argmin(np.abs(fpr - fpr_threshold))]
-        print([(i,j,k) for i,j,k in zip(fpr, tpr, thresholds)])
-        print(decision_threshold)
-        
-        plt.plot(fpr, tpr, color='teal', lw=2, label='ROC curve (AUC = %0.2f)' % roc_auc)
-        plt.plot([0, 1], [0, 1], color='grey', lw=2, linestyle='--')
-        plt.xlim([0.0, 1.0])
-        plt.ylim([0.0, 1.05])
-        plt.xlabel('False Positive Rate', fontsize=12, fontweight='bold')
-        plt.ylabel('True Positive Rate', fontsize=12, fontweight='bold')
-        plt.title('Receiver Operating Characteristic (ROC) Curve', fontsize=14, fontweight='bold')
-        plt.legend(loc='lower right', fontsize=12)
-        plt.tick_params(labelsize=10, width=2, length=5, which='both')
-        plt.grid(True)
-        plt.tight_layout()  # Optional for better spacing between elements
-        
-        if savePath:
-            plt.savefig(savePath, dpi=300)  # Save the figure if needed
-        plt.close()
-        
-        return decision_threshold
+    
         
     @staticmethod
     def unit_test_baseRFmodel(args):
         """
         unit test for the base RF model object
         """
-        # Loading the datasets for testing the fusion modules
+        # Loading the datasets for testing the model
         hpc_x_train = np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/10/10/rn1/channel_bins_train.npy")
         hpc_y_train = np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/10/10/rn1/labels_train.npy")
         
@@ -567,15 +540,16 @@ class baseRFmodel:
         newBaseModelInst.load_model(fpath="testmodel.pkl")
 
         print(f" - Generate the uncertainty scores -")
-        test_uncertainty, predict_proba = newBaseModelInst.eval_uncertainty(Xtest=hpc_x_test[0], savePath_boxPlot="test.png")
+        test_uncertainty, predict_proba = newBaseModelInst.eval_uncertainty(Xtest=hpc_x_test[0])
         print(np.mean(test_uncertainty))
         
+        print(f" - Generate the ROC curve -")
         baseRFmodel.generate_roc_curve(Ytest=hpc_y_test, Ypred_proba=predict_proba, savePath="test2.png", fpr_threshold=0.2)
         # newBaseModelInst.eval(Xtest=X_test[0],Ytest=Y_test,print_performance_metric=True)
 
-class late_stage_fusion:
+class HPC_classifier:
     """
-    Object for tracking the stage-1 and stage-2 predictive performance.
+    Object for tracking the performance of the HPC classifier for a given configuration of training and test data.
     """        
     hpcGroupNameList = ["hpc-group-1", "hpc-group-2", "hpc-group-3", "hpc-group-4"]
 
@@ -587,9 +561,11 @@ class late_stage_fusion:
         ########################################## Performance metricts  ##########################################
         # List of file hashes used for training the base classifiers
         self.baseClassifierTrainFileHashList = None 
+        # List of file hashes used for testing the base classifiers
+        self.baseClassifierTestFileHashList = None 
          
         # List of performance metrics for all the base classifiers of GLOBL channels and HPC groups. 
-        stage1ClfPerformanceMetricTemplate = {chnGrpName: None for chnGrpName in late_stage_fusion.hpcGroupNameList}
+        stage1ClfPerformanceMetricTemplate = {chnGrpName: None for chnGrpName in HPC_classifier.hpcGroupNameList}
         self.stage1ClassifierPerformanceMetrics = {"training":stage1ClfPerformanceMetricTemplate.copy(), "testing":stage1ClfPerformanceMetricTemplate.copy()}
         ###########################################################################################################
     
@@ -618,7 +594,7 @@ class late_stage_fusion:
                 trainingData = XtrainHPC[groupNumber].squeeze() 
                 trainingLabel = YtrainHPC[groupNumber]
                 
-                baseModelInst = baseRFmodel(args=self.args, channelName=groupName, channelType="hpc")
+                baseModelInst = baseRFmodel(args=self.args, channelName=groupName)
                 baseModelInst.train(Xtrain=trainingData,Ytrain=trainingLabel)
                 modelDict[groupName] = baseModelInst
 
@@ -628,7 +604,6 @@ class late_stage_fusion:
                                             'recall': None}
                     self.stage1ClassifierPerformanceMetrics["training"][groupName] = _performance_metric
                 
-
             self.hpcGroupBaseClf = modelDict
 
 
@@ -669,43 +644,87 @@ class late_stage_fusion:
         return allGroupPredictions
         
     
-    def pretty_print_performance_metric(self, baseClfPerfFlag=False):
+    def pretty_print_performance_metric(self):
         """
         Prints the performance metric to stdout.
         """
-        if baseClfPerfFlag:
-            print("\n----------- Base classifiers performance metric -----------")
-            for splitType, stage1ClfPerformanceMetricTemplate in self.stage1ClassifierPerformanceMetrics.items():
-                print(f"----------- Split Type : {splitType} -----------")
+        print("\n----------- HPC classifiers performance metric for all groups -----------")
+        for splitType, stage1ClfPerformanceMetricTemplate in self.stage1ClassifierPerformanceMetrics.items():
+            print(f"----------- Split Type : {splitType} -----------")
+            if splitType == "testing":
                 for chnGrpName, perfMetric in stage1ClfPerformanceMetricTemplate.items():
                     try:
-                        print(f" Channel name: {chnGrpName} | F1 : {perfMetric['f1']} | precision : {perfMetric['precision']} | recall : {perfMetric['recall']}")
+                        print(f" Channel name: {chnGrpName}")
+                        print(f" SUMMARY - F1 : {perfMetric['summary']['f1']} | precision : {perfMetric['summary']['precision']} | recall : {perfMetric['summary']['recall']} | support : {perfMetric['summary']['support']}")
+                        print(f" MALWARE - F1 : {perfMetric['class-1']['f1']} | precision : {perfMetric['class-1']['precision']} | recall : {perfMetric['class-1']['recall']} | support : {perfMetric['class-1']['support']}")
+                        print(f" BENIGN - F1 : {perfMetric['class-0']['f1']} | precision : {perfMetric['class-0']['precision']} | recall : {perfMetric['class-0']['recall']} | support : {perfMetric['class-0']['support']}")
+                        
                     except:
-                        print(f" Channel name: {chnGrpName} | *********** ")
+                        print(f" *********** ")
+            
+            elif splitType == "training":
+                for chnGrpName, perfMetric in stage1ClfPerformanceMetricTemplate.items():
+                    print(f" Channel name: {chnGrpName}")
+                    try:
+                        print(f" SUMMARY - F1 : {perfMetric['f1']}")
+                    except:
+                        print(f" *********** ")
+            
+            else: raise ValueError(f"Invalid splitType: {splitType}")
 
        
     @staticmethod
-    def get_hashList_from_fileList(file_paths):
+    def get_train_test_hashList(file_paths_list_for_all_groups):
         """
-        Returns a list of hashes from the file list.
+        Returns a list of hashes (apks) used for training/testing the model for all the HPC-groups.
+        params:
+            - file_paths_list_for_all_groups (list): [file_paths_group1, file_paths_group2, file_paths_group3, file_paths_group4]
+                                                    -> file_paths_group1 (list): List of file paths for group1 ...
+
+        Output:
+            - hashList (list): List of hashes extracted from the file paths
+            
+        """
+        hashList = []
+        regex_pattern = r'.*\/(.*)__.*it(\d*)_rn(\d*).txt'
+
+        # Parse this file list to extract the hashes
+
+        for file_pathList_for_group in file_paths_list_for_all_groups:
+            for filename in file_pathList_for_group:
+                file_hash_obj = re.search(regex_pattern, filename, re.M|re.I)
+                file_hash_string = file_hash_obj.group(1).strip()
+                if file_hash_string not in hashList:
+                    hashList.append(file_hash_string)
+
+        return hashList
+    
+    @staticmethod
+    def get_metaInfo_from_fileList(file_paths_list):
+        """
+        For each path in file_paths_list, extracts the hash, it, rn
         params:
             - file_paths (list): List of file paths
 
         Output:
-            - hashList (list): List of hashes extracted from the file paths
+            - metaInfo (list): [(hash, it, rn), (hash, it, rn), ...)]
         """
-        hashList = []
-        regex_pattern = r'.*\/(.*)__.*'
+        metaInfo = []
+        regex_pattern = r'.*\/(.*)__.*it(\d*)_rn(\d*).txt'
 
         # Parse this file list to extract the hashes
-        for filename in file_paths:
+        for filename in file_paths_list:
             file_hash_obj = re.search(regex_pattern, filename, re.M|re.I)
+            
             file_hash_string = file_hash_obj.group(1).strip()
-            hashList.append(file_hash_string)
+            iter_val = int(file_hash_obj.group(2).strip())
+            rn_val = int(file_hash_obj.group(3).strip())
+            
+            metaInfo.append((file_hash_string, iter_val, rn_val))
 
-        return hashList
+        return metaInfo
 
-    def save_fusion_object(self, fpath):
+    def save_HPC_clf_object(self, fpath):
         """
         Saves the model and the model details to the specified path.
 
@@ -713,8 +732,10 @@ class late_stage_fusion:
             - fpath: full path where the model should be saved
         """
         # Used for saving and loading the object
-        model_pickle_file = {   "hpcGroupBaseClf":self.hpcGroupBaseClf,
+        model_pickle_file = {   
+                                "hpcGroupBaseClf":self.hpcGroupBaseClf,
                                 "baseClassifierTrainFileHashList":self.baseClassifierTrainFileHashList,
+                                "baseClassifierTestFileHashList":self.baseClassifierTestFileHashList,
                                 "stage1ClassifierPerformanceMetrics":self.stage1ClassifierPerformanceMetrics,  
                             }
 
@@ -723,7 +744,7 @@ class late_stage_fusion:
             pickle.dump(model_pickle_file, handle, protocol=pickle.HIGHEST_PROTOCOL) 
         
 
-    def load_fusion_object(self, fpath):
+    def load_HPC_clf_object(self, fpath):
         """
         Loads the model from the specified path. And populates all the corresponding model details of this object.
         """
@@ -733,11 +754,70 @@ class late_stage_fusion:
 
         self.hpcGroupBaseClf = model_pickle_file["hpcGroupBaseClf"]
         self.baseClassifierTrainFileHashList = model_pickle_file["baseClassifierTrainFileHashList"]
+        self.baseClassifierTestFileHashList = model_pickle_file["baseClassifierTestFileHashList"]
         self.stage1ClassifierPerformanceMetrics = model_pickle_file["stage1ClassifierPerformanceMetrics"]
         
+    def generate_roc_curve_for_all_groups(self, XtrainHPC, YtrainHPC, savePath=None):
+        """
+        Generates the roc curve for all the groups.
+        Flow:
+            - Generate the predict_proba for all the groups
+            - Generate the roc curve for all the groups
+        params:
+            - XtrainHPC (list): List of training data for all the groups [group1, group2, group3, group4] | shape: (Nsamples, feature_size)
+            - YtrainHPC (list): List of training labels for all the groups [group1, group2, group3, group4] | shape: (Nsamples,)
+            - savePath (str): Path where the roc curve should be saved
+        """
+        # Stores the predictions of all the groups over their corresponding test dataset
+        allGroup_PredictionProba = []
+        
+        # Test a classifier for every group
+        for groupNumber, (groupName,groupModel) in enumerate(self.hpcGroupBaseClf.items()): 
+            print(f" - Evaluating baseRF model for hpc-group: {groupName}")
+            
+            # Fetch testingData (Nsamples, feature_size) and trainingLabel (Nsamples,)
+            testData = XtrainHPC[groupNumber].squeeze() 
+            testLabel = YtrainHPC[groupNumber]
+            
+            # Get the prediction from the group model
+            _, predict_proba = groupModel.eval_uncertainty(Xtest = testData)
+            allGroup_PredictionProba.append(predict_proba)
+            
+        linestyle = ['solid', 'dashed', 'dashdot', ':']
+        linecolor = ['#4c72b0', '#55a868', '#c44e52', '#8172b2']
+
+        # Generate the roc curve for all the groups
+        for i in range(len(YtrainHPC)):
+            fpr, tpr, thresholds = roc_curve(YtrainHPC[i], allGroup_PredictionProba[i])
+            roc_auc = auc(fpr, tpr)
+
+            plt.plot(fpr, tpr, lw=2, label=f'HPC-group-{i+1} (AUC = {roc_auc:.2f})', linestyle=linestyle[i], color=linecolor[i])
+
+        plt.plot([0, 1], [0, 1], color='grey', lw=2, linestyle='--', alpha=0.5)
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate', fontsize=12, fontweight='bold')
+        plt.ylabel('True Positive Rate', fontsize=12, fontweight='bold')
+        plt.title('Receiver Operating Characteristic (ROC) Curve', fontsize=14, fontweight='bold')
+        plt.legend(loc='lower right', fontsize=12)
+        plt.tick_params(labelsize=10, width=2, length=5, which='both')
+        plt.grid(True)
+        plt.tight_layout()  # Optional for better spacing between elements
+
+        if savePath:
+            plt.savefig(savePath, dpi=300)  # Save the figure if needed
+        plt.close()
+        
+        return allGroup_PredictionProba
+    
+    def generate_uncertainty_score_for_all_groups(self, XtestHPC):
+        """
+        Generates the uncertainty score for all the groups.
+        """
+        pass
 
     @staticmethod
-    def unit_test_lateStageFusion(args):
+    def unit_test_HPC_classifier(args):
         """
         unit test for the late_stage_fusion object
         """
@@ -745,14 +825,26 @@ class late_stage_fusion:
         # Loading the unmatched datasets for the unit tests
         hpc_x_train = []
         hpc_y_train = []
+        hpc_filePaths_train = []
         hpc_x_test = []
         hpc_y_test = []
-        for group in ["rn1","rn2","rn3","rn4"]:
-            hpc_x_train.append(np.load(f"/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset/std-dataset/15/40/HPC_individual/{group}/channel_bins_train.npy"))
-            hpc_y_train.append(np.load(f"/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset/std-dataset/15/40/HPC_individual/{group}/labels_train.npy"))
-            hpc_x_test.append(np.load(f"/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset/cd-dataset/15/40/HPC_individual/{group}/channel_bins_test.npy"))
-            hpc_y_test.append(np.load(f"/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset/cd-dataset/15/40/HPC_individual/{group}/labels_test.npy"))
+        hpc_filePaths_test = []
         
+        for group in ["rn1","rn2","rn3","rn4"]:
+            hpc_x_train.append(np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/0/10/{group}/channel_bins_train.npy"))
+            hpc_y_train.append(np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/0/10/{group}/labels_train.npy"))
+            with open(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/0/10/{group}/file_paths_train.npy", 'rb') as fp:
+                hpc_filePaths_train.append(np.array(pickle.load(fp), dtype="object"))
+               
+            # hpc_x_test.append(np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/cdyear1-dataset/0/10/{group}/channel_bins_test.npy"))
+            # hpc_y_test.append(np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/cdyear1-dataset/0/10/{group}/labels_test.npy"))
+
+            hpc_x_test.append(np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/0/10/{group}/channel_bins_test.npy"))
+            hpc_y_test.append(np.load(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/0/10/{group}/labels_test.npy"))
+            with open(f"/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset/std-dataset/0/10/{group}/file_paths_test.npy", 'rb') as fp:
+                hpc_filePaths_test.append(np.array(pickle.load(fp), dtype="object"))
+            
+
         print("Details of HPC training and test data")
         print(f" - Shape of the training data and label : {[(dataset.shape,labels.shape) for dataset,labels in zip(hpc_x_train,hpc_y_train)]}")
         print(f" - Shape of the test data and label : {[(dataset.shape,labels.shape) for dataset,labels in zip(hpc_x_test,hpc_y_test)]}")
@@ -763,38 +855,46 @@ class late_stage_fusion:
         hpc_x_test, hpc_y_test = rmInst.resampleHpcTensor(Xlist=hpc_x_test, yList=hpc_y_test)
         ###################################################
         
-        # # Testing the training module
-        # print(f" - Training the hpc and globl base classifiers -")
-        # lateFusionInstance = late_stage_fusion(args=args)
-        # lateFusionInstance.stage1trainHPC(XtrainHPC=hpc_x_train, YtrainHPC=hpc_y_train, updateObjectPerformanceMetrics=True)
+        # Testing the training module
+        print(f" - Training the hpc and globl base classifiers -")
+        HPC_clfInst = HPC_classifier(args=args)
+        # HPC_clfInst.stage1trainHPC(XtrainHPC=hpc_x_train, YtrainHPC=hpc_y_train, updateObjectPerformanceMetrics=True)
         
         # print(" - Summary performance metric of all the models [post training] -")
-        # lateFusionInstance.pretty_print_performance_metric(baseClfPerfFlag=True)
+        # HPC_clfInst.pretty_print_performance_metric()
 
         # # Testing the evaluation module
         # print(f" - Evaluating the hpc and globl base classifiers -")
-        # allGroupPredictions = lateFusionInstance.stage1evalHPC(XtestHPC=hpc_x_test, YtestHPC=hpc_y_test, updateObjectPerformanceMetrics=True, print_performance_metric=True)
+        # allGroupPredictions = HPC_clfInst.stage1evalHPC(XtestHPC=hpc_x_test, YtestHPC=hpc_y_test, updateObjectPerformanceMetrics=True, print_performance_metric=True)
 
         # print(" - Shape of the predicted labels post evaluation -")
         # print(f" - HPC predicted labels for all groups (Nsamples, ): {[grp.shape for grp in allGroupPredictions]}")
 
         # print(" - Summary performance metric of all the models [post evaluation] -")
-        # lateFusionInstance.pretty_print_performance_metric(baseClfPerfFlag=True)
+        # HPC_clfInst.pretty_print_performance_metric()
+        
         
         # # Testing the loading and saving module
         # print(f" - Saving the object -")
-        # lateFusionInstance.save_fusion_object(fpath="testmodel.pkl")
+        # HPC_clfInst.save_HPC_clf_object(fpath="testmodel.pkl")
         
         # print(f" - Loading the object and testing the models -")
-        # lateFusionInstance = late_stage_fusion(args=args)
-        # lateFusionInstance.load_fusion_object(fpath="testmodel.pkl")
-        # lateFusionInstance.stage1evalHPC(XtestHPC=hpc_x_test, YtestHPC=hpc_y_test, updateObjectPerformanceMetrics=False, print_performance_metric=True)
+        # HPC_clfInst_loaded = HPC_classifier(args=args)
+        # HPC_clfInst_loaded.load_HPC_clf_object(fpath="testmodel.pkl")
+        # HPC_clfInst_loaded.stage1evalHPC(XtestHPC=hpc_x_test, YtestHPC=hpc_y_test, updateObjectPerformanceMetrics=True, print_performance_metric=True)
 
         # print(" - Summary performance metric of all the models [post evaluation post loading] -")
-        # lateFusionInstance.pretty_print_performance_metric(baseClfPerfFlag=True)
-        # exit()
+        # HPC_clfInst_loaded.pretty_print_performance_metric()
         
-
+        # print(" - Plot the roc curve for the loaded model -")
+        # HPC_clfInst_loaded.generate_roc_curve_for_all_groups(XtrainHPC=hpc_x_test, YtrainHPC=hpc_y_test, savePath="test_roc.png")
+        
+        # Testing the hashList extraction module
+        print(f" - Extracting the hashList -")
+        hashList_train = HPC_clfInst.get_train_test_hashList(file_paths_list_for_all_groups=hpc_filePaths_train)
+        hashList_test = HPC_clfInst.get_train_test_hashList(file_paths_list_for_all_groups=hpc_filePaths_test)
+        metaInfo_train = HPC_clfInst.get_metaInfo_from_fileList(file_paths_list=hpc_filePaths_train[0])
+        
 
 class featureEngineeredDatasetLoader:
     """
@@ -806,17 +906,14 @@ class featureEngineeredDatasetLoader:
 
         params:
             - basePath_featureEngineeredDataset (str): Location of the base folder where all the feature engineered dataset is stored
-            - datasetName (str): Can be one of the following {'std-dataset', 'bench-dataset', 'cdyear1-dataset', 'cdyear2-dataset', 'cdyear3-dataset'}
+            - datasetName (str): Can be one of the following {'std-dataset', 'cdyear1-dataset', 'cdyear2-dataset', 'cdyear3-dataset'}
             - logcatRuntimeThreshold (int), truncatedDuration (int) : Used for accessing the corresponding dataset
         
         Output:
-            - featEngineeredData (dict): {'DVFS_partition_for_HPC_DVFS_fusion':{"train": ... , "trainSG": ... , "test": ...},
-                                                'HPC_partition_for_HPC_DVFS_fusion':{"train": ... , "trainSG": ... , "test": ...},
-                                                'HPC_individual':{"train": ... , "trainSG": ... , "test": ... },
-                                                'DVFS_individual':{"train": ... , "trainSG": ... , "test": ...},
-                                                'DVFS_fusion':{"train": ... , "trainSG": ... , "test": ...} 
-                                                
-                                                ... -> [X_list, y_list, file_list] or [X_dat, y_dat, file_dat] 
+            - featEngineeredData (dict): {"train": [X_list, y_list, file_list] , "test": [X_list, y_list, file_list]} 
+                                            -> X_list (list): [X_group1, X_group2, ..., X_group4]
+                                            -> y_list (list): [y_group1, y_group2, ..., y_group4]
+                                            -> file_list (list): [file_group1, file_group2, ..., file_group4]
         """
         # Used for accessing the dataset
         self.basePath_featureEngineeredDataset = basePath_featureEngineeredDataset
@@ -833,40 +930,27 @@ class featureEngineeredDatasetLoader:
         """
         Loads the datasets for the different classification tasks of interest.
         Output:
-            - featEngineeredData (dict): {'DVFS_partition_for_HPC_DVFS_fusion':{"train": ... , "trainSG": ... , "test": ...},
-                                                'HPC_partition_for_HPC_DVFS_fusion':{"train": ... , "trainSG": ... , "test": ...},
-                                                'HPC_individual':{"train": ... , "trainSG": ... , "test": ... },
-                                                'DVFS_individual':{"train": ... , "trainSG": ... , "test": ...},
-                                                'DVFS_fusion':{"train": ... , "trainSG": ... , "test": ...} 
-                                                
-                                                ... -> [X_list, y_list, file_list] or [X_dat, y_dat, file_dat]
+            - featEngineeredData (dict): {"train": [X_list, y_list, file_list] , "test": [X_list, y_list, file_list]} 
+                                            -> X_list (list): [X_group1, X_group2, ..., X_group4]
+                                            -> y_list (list): [y_group1, y_group2, ..., y_group4]
+                                            -> file_list (list): [file_group1, file_group2, ..., file_group4]
         """
         featureEngineeredData = {}
 
-        for clfToi, partitionActivationFlag in self.requiredPartitions.items():
-            featureEngineeredData[clfToi] = {}
-            for partition, activationFlag in partitionActivationFlag.items():
-                featureEngineeredData[clfToi][partition] = None
-                if not activationFlag:
-                    continue
-    
-                # Else load the dataset for this partition
-                if clfToi in ["DVFS_partition_for_HPC_DVFS_fusion", "HPC_partition_for_HPC_DVFS_fusion", "HPC_individual"]:
-                    featureEngineeredData[clfToi][partition] = self.load_rnBucket_dataset(clf_toi=clfToi, partition_type=partition)
-                elif clfToi in ["DVFS_individual", "DVFS_fusion"]:
-                    featureEngineeredData[clfToi][partition] = self.load_globlOnlyType_dataset(clf_toi=clfToi, partition_type=partition)
-                else:
-                    raise ValueError(f"Incorrect classification task {clfToi}")
-        
+        for partition, activationFlag in self.requiredPartitions.items():
+            if activationFlag:
+                featureEngineeredData[partition] = self.load_rnBucket_dataset(partition_type=partition)
+            else:
+                featureEngineeredData[partition] = None
+            
         return featureEngineeredData
                     
-    def load_rnBucket_dataset(self, clf_toi, partition_type):
+    def load_rnBucket_dataset(self, partition_type):
         """
         Used for loading partitions that are divided into rn buckets.
 
         params:
-            - clf_toi: DVFS_partition_for_HPC_DVFS_fusion, HPC_partition_for_HPC_DVFS_fusion, or HPC_individual
-            - partition_type: "train", "trainSG", or "test"
+            - partition_type: "train" or "test"
 
         Output: X_list, y_list, file_list
             - X_list (ndarray): [dataset_group1, dataset_group2, dataset_group3, dataset_group4] | dataset shape: (1, Nsamples, feature_size)
@@ -875,59 +959,35 @@ class featureEngineeredDatasetLoader:
         """
         X_list, y_list, file_list = [], [], []
         for group in ["rn1","rn2","rn3","rn4"]:
-            X_list.append(np.load(os.path.join(self.basePath_featureEngineeredDataset, self.datasetName, str(self.logcatRuntimeThreshold), str(self.truncatedDuration), clf_toi, group, f"channel_bins_{partition_type}.npy")))
-            y_list.append(np.load(os.path.join(self.basePath_featureEngineeredDataset, self.datasetName, str(self.logcatRuntimeThreshold), str(self.truncatedDuration), clf_toi, group, f"labels_{partition_type}.npy")))
-            with open(os.path.join(self.basePath_featureEngineeredDataset, self.datasetName, str(self.logcatRuntimeThreshold), str(self.truncatedDuration), clf_toi, group, f"file_paths_{partition_type}.npy"), 'rb') as fp:
+            X_list.append(np.load(os.path.join(self.basePath_featureEngineeredDataset, self.datasetName, str(self.logcatRuntimeThreshold), str(self.truncatedDuration), group, f"channel_bins_{partition_type}.npy")))
+            y_list.append(np.load(os.path.join(self.basePath_featureEngineeredDataset, self.datasetName, str(self.logcatRuntimeThreshold), str(self.truncatedDuration), group, f"labels_{partition_type}.npy")))
+            with open(os.path.join(self.basePath_featureEngineeredDataset, self.datasetName, str(self.logcatRuntimeThreshold), str(self.truncatedDuration), group, f"file_paths_{partition_type}.npy"), 'rb') as fp:
                 file_list.append(np.array(pickle.load(fp), dtype="object"))
             
         return X_list, y_list, file_list
 
-    def load_globlOnlyType_dataset(self, clf_toi, partition_type):
-        """
-        Used for loading partitions that have not been divided into rn buckets.
-
-        params:
-            - clf_toi: DVFS_individual, or DVFS_fusion
-            - partition_type: "train", "trainSG", or "test"
-
-        Output: X_dat, y_dat, file_dat
-            - X_dat (ndarray): dataset (Nchannels, Nsamples, feature_size)
-            - y_dat (ndarray): labels (Nsamples,)
-            - file_dat (ndarray): list of corresponding file paths (Nsamples,)
-        """
-        X_dat = np.load(os.path.join(self.basePath_featureEngineeredDataset, self.datasetName, str(self.logcatRuntimeThreshold), str(self.truncatedDuration), clf_toi, "all", f"channel_bins_{partition_type}.npy"))
-        y_dat = np.load(os.path.join(self.basePath_featureEngineeredDataset, self.datasetName, str(self.logcatRuntimeThreshold), str(self.truncatedDuration), clf_toi, "all", f"labels_{partition_type}.npy"))
-        with open(os.path.join(self.basePath_featureEngineeredDataset, self.datasetName, str(self.logcatRuntimeThreshold), str(self.truncatedDuration), clf_toi, "all", f"file_paths_{partition_type}.npy"), 'rb') as fp:
-            file_dat = np.array(pickle.load(fp), dtype="object")
-             
-        return X_dat, y_dat, file_dat
     
     @staticmethod
     def unit_test_featureEngineeredDatasetLoader():
-        loadDatasetInst = featureEngineeredDatasetLoader(basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/xmd/data/featureEngineeredDataset",
+        loadDatasetInst = featureEngineeredDatasetLoader(basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset",
                                                         datasetName="std-dataset",
-                                                        logcatRuntimeThreshold=5,
+                                                        logcatRuntimeThreshold=80,
                                                         truncatedDuration=10)
         featureEngineeredData = loadDatasetInst.load_dataset()
-        for clfToi, partitionActivationFlag in featureEngineeredData.items():
-            print(f"Classification task of interest: {clfToi}")
-            for partitionName, partition in partitionActivationFlag.items():
-                if partition is None:
-                    print(f"Partition- {partitionName} | *********** ")
-                    continue
     
-                if clfToi in ["DVFS_partition_for_HPC_DVFS_fusion", "HPC_partition_for_HPC_DVFS_fusion", "HPC_individual"]:
-                    print(f"Partition- {partitionName} | Size: {[(x.shape,y.shape,z.shape) for x,y,z in zip(partition[0],partition[1],partition[2])]}")
-                elif clfToi in ["DVFS_individual", "DVFS_fusion"]:
-                    print(f"Partition- {partitionName} | Size: {partition[0].shape,partition[1].shape,partition[2].shape}")
-                    
+        for partitionName, partition in featureEngineeredData.items():
+            if partition is None:
+                print(f"Partition- {partitionName} | *********** ")
+                continue
+            print(f"Partition- {partitionName} | Size: {[(x.shape,y.shape,z.shape) for x,y,z in zip(partition[0],partition[1],partition[2])]}")
+                
 
 class orchestrator:
     """
     Orchestrates the training and evaluation tasks for all the datasets and classification tasks of interest.
     """
     
-    def __init__(self, args, basePath_featureEngineeredDataset, datasetName, malwarePercent, xmd_base_folder_location) -> None:
+    def __init__(self, args, basePath_featureEngineeredDataset, datasetName, malwarePercent, kumal_base_folder_location) -> None:
         self.args = args
         # Location of the base folder where all the feature engineered datasets are stored
         self.basePath_featureEngineeredDataset = basePath_featureEngineeredDataset
@@ -943,24 +1003,15 @@ class orchestrator:
         self.malwarePercent = malwarePercent
 
         # Base folder of xmd's dataset
-        self.xmd_base_folder_location = xmd_base_folder_location
-
-        # 2-D array storing the grid containing paths of saved late-stage-fusion objects
-        ## self.lateStageFusionObject : {<logcatRuntimeThreshold>:{<truncatedDuration>: ... }, ... }
-        self.lateStageFusionObject = {}
-        for logcatRuntimeThreshold in self.candidateLogcatRuntimeThresholds:
-            self.lateStageFusionObject[logcatRuntimeThreshold] = {}
-            for truncatedDuration in self.candidateTruncatedDurations:
-                self.lateStageFusionObject[logcatRuntimeThreshold][truncatedDuration] = None
+        self.kumal_base_folder_location = kumal_base_folder_location
 
 
-    def std_dataset_tasks(self, logcatRuntimeThreshold, truncatedDuration, print_performance_metric, saveTrainedModels, trainStage1, trainStage2):
+    def std_dataset_tasks(self, logcatRuntimeThreshold, truncatedDuration, print_performance_metric, saveTrainedModels, trainHPCClassifiers):
         """
         Tasks:
             -Load the dataset for all the classification tasks.
             -Resample the dataset.
             -Train the HPC base classifiers.
-            -Train the DVFS base classifiers.
             -Save the hash list used for training the base classifiers
             -Save the trained base classifiers.
         params:
@@ -968,11 +1019,9 @@ class orchestrator:
             - truncatedDuration (int): To truncate the time series, i.e., take the first truncatedDuration seconds.
             - print_performance_metric (bool): If True, then print the performance metrics for all evaluations.
             - saveTrainedModels (bool): If True, then save the lateStageFusion object in the trainedModels folder.
-            - trainStage1 (bool): Train stage 1 models if True.
-            - trainStage2 (bool): Train stage 2 models if True.
+            - trainHPCClassifiers (bool): If True, then train the HPC base classifiers.
         Output:
-            - lateFusionInstance : Instance of the object storing all the trained models
-            - self.lateStageFusionObject : Stores the path of late-stage-fusion object for the corresponding logcatRuntimeThreshold and truncatedDuration.
+            - HPC_classifier_inst : Instance of the object storing all the trained models
         """
         ######################################### Load the dataset for all the tasks ########################################
         assert self.datasetName == "std-dataset", "Incorrect dataset name"
@@ -982,8 +1031,9 @@ class orchestrator:
                                                         truncatedDuration=truncatedDuration)
         featureEngineeredData = loadDatasetInst.load_dataset()
 
-        # For training the globl and hpc base classifiers
-        hpc_X_train, hpc_Y_train, hpc_fileList = featureEngineeredData['HPC_individual']['train']
+        # For training the hpc base classifiers
+        hpc_X_train, hpc_Y_train, hpc_fileList_train = featureEngineeredData['train']
+        hpc_X_test, hpc_Y_test, hpc_fileList_test = featureEngineeredData['test']
         ######################################################################################################################
         
         ######################################## Resampler ########################################
@@ -991,69 +1041,54 @@ class orchestrator:
         hpc_X_train, hpc_Y_train = rmInst.resampleHpcTensor(Xlist=hpc_X_train, yList=hpc_Y_train)
         ###########################################################################################
         
-        lateFusionInstance = None
-        if trainStage1:
-            ######################################### Train the HPC and the DVFS base classifiers ########################################
+        HPC_classifier_inst = None
+        if trainHPCClassifiers:
+            ######################################### Train the HPC classifiers ########################################
             print(f" - Training the hpc and globl base classifiers -")
-            lateFusionInstance = late_stage_fusion(args=self.args)
-            lateFusionInstance.stage1trainHPC(XtrainHPC=hpc_X_train, YtrainHPC=hpc_Y_train, updateObjectPerformanceMetrics=False)
-            ##############################################################################################################################
+            HPC_classifier_inst = HPC_classifier(args=self.args)
+            HPC_classifier_inst.stage1trainHPC(XtrainHPC=hpc_X_train, YtrainHPC=hpc_Y_train, updateObjectPerformanceMetrics=True)
+            ############################################################################################################
             
-            ################################### Update the performance metrics using the train-SG dataset ################################
-            XtrainSG = lateFusionInstance.generateTrainSGdataset(XtestGLOBL_HPC=XtestGLOBL_HPC_res, YtestGLOBL_HPC = YtestGLOBL_HPC_res)
-        
-            # Update the base classifier scores
-            lateFusionInstance.update_stage1_performance_metrics_USING_TRAINSG(XtrainSG=XtrainSG, 
-                                                                                updateObjectPerformanceMetrics=True, 
-                                                                                print_performance_metric=print_performance_metric)
-            # Generate the globl and dvfs fusion scores
-            lateFusionInstance.stage2_globlFusion_ensemble_eval_USING_TRAINSG(XtrainSG = XtrainSG, 
-                                                                            updateObjectPerformanceMetrics=True, 
-                                                                            print_performance_metric=print_performance_metric)
+            ######################################### Test the HPC ########################################
+            HPC_classifier_inst.stage1evalHPC(XtestHPC=hpc_X_test, 
+                                              YtestHPC=hpc_Y_test, 
+                                              updateObjectPerformanceMetrics=True, 
+                                              print_performance_metric=True)
+            ###############################################################################################
             
-            # Generate the hpc-globl fusion scores
-            lateFusionInstance.stage2_hpcGlobl_ensemble_eval(XtrainSG = XtrainSG, 
-                                                            updateObjectPerformanceMetrics=True, 
-                                                            print_performance_metric=print_performance_metric,
-                                                            splitType="training")
-            #####################################################################################################################################
-            # Save the hash list used for training the base classifiers
-            lateFusionInstance.baseClassifierTrainFileHashList = late_stage_fusion.get_hashList_from_fileList(file_paths=dvfs_fileList)
+            # Save the hash list used for training and testing the base classifiers
+            HPC_classifier_inst.baseClassifierTrainFileHashList = HPC_classifier.get_train_test_hashList(file_paths=hpc_fileList_train)
+            HPC_classifier_inst.baseClassifierTestFileHashList = HPC_classifier.get_train_test_hashList(file_paths=hpc_fileList_test)
             
             if print_performance_metric:
                 # Pretty print performance metric
                 print(f"Summary of performance metrics for dataset : {self.datasetName}, logcatRuntimeThreshold : {logcatRuntimeThreshold}, truncatedDuration : {truncatedDuration}")
-                lateFusionInstance.pretty_print_performance_metric(baseClfPerfFlag=True)
+                HPC_classifier_inst.pretty_print_performance_metric()
         
             # Save the trained models
             if saveTrainedModels:
-                savePath = os.path.join(self.xmd_base_folder_location, "res", "trainedModels", self.datasetName)
+                savePath = os.path.join(self.kumal_base_folder_location, "res", "trainedModels", self.datasetName)
                 if not os.path.isdir(savePath):
                     os.makedirs(savePath)
-                savePath = os.path.join(savePath,f"lateFusion_logRuntime{logcatRuntimeThreshold}_truncDuration{truncatedDuration}_malwarePercent{self.malwarePercent}.pkl")
-                self.lateStageFusionObject[logcatRuntimeThreshold][truncatedDuration] = savePath
-                lateFusionInstance.save_fusion_object(fpath=savePath)
+                savePath = os.path.join(savePath,f"HPC_Object_logRuntime{logcatRuntimeThreshold}_truncDuration{truncatedDuration}_malwarePercent{self.malwarePercent}.pkl")
+                HPC_classifier_inst.save_HPC_clf_object(fpath=savePath)
         
         else:
             # Load the saved object containing the trained models
-            savePath = os.path.join(self.xmd_base_folder_location, "res", "trainedModels", self.datasetName)
-            savePath = os.path.join(savePath,f"lateFusion_logRuntime{logcatRuntimeThreshold}_truncDuration{truncatedDuration}_malwarePercent{self.malwarePercent}.pkl")
-            lateFusionInstance = late_stage_fusion(args=self.args)
-            lateFusionInstance.load_fusion_object(fpath=savePath)
+            savePath = os.path.join(self.kumal_base_folder_location, "res", "trainedModels", self.datasetName)
+            savePath = os.path.join(savePath,f"HPC_Object_logRuntime{logcatRuntimeThreshold}_truncDuration{truncatedDuration}_malwarePercent{self.malwarePercent}.pkl")
+            HPC_classifier_inst = HPC_classifier(args=self.args)
+            HPC_classifier_inst.load_HPC_clf_object(fpath=savePath)
 
-              
-        return lateFusionInstance
+        return HPC_classifier_inst
 
-    def cd_dataset_tasks(self, trainedModelDetails, logcatRuntimeThreshold, truncatedDuration, print_performance_metric, saveLateStageFusionObject):
+    def cd_dataset_tasks(self, trainedModelDetails, logcatRuntimeThreshold, truncatedDuration, print_performance_metric, save_HPC_Clf_Object):
         """
         Tasks:
             -Load the trained model.
             -Load the dataset for all the classification tasks.
             -Resample the dataset.
-            -Test the DVFS base classifier
             -Test HPC base classifier
-            -Test Global fusion
-            -Test HPC-DVFS fusion
             -Save the hash list used for testing the classifiers
 
         params:
@@ -1061,17 +1096,17 @@ class orchestrator:
                                         -> Used for loading the corresponding trained model
             - logcatRuntimeThreshold (int), truncatedDuration (int): Used for loading the dataset for the classification task
             - print_performance_metric (bool): If True, then print the performance metrics for all evaluations.
-            - saveLateStageFusionObject (bool): If True, then save the updated lateStageFusion object.
+            - save_HPC_Clf_Object (bool): If True, then save the updated HPC_classifier object.
         
         Output:
             - lateFusionInstance : Instance of the object storing all the update performance evaluation metrics        
         """
         ################################### Load the trained model ###################################
         savePath = os.path.join(self.xmd_base_folder_location, "res", "trainedModels", "std-dataset")
-        savePath = os.path.join(savePath,f"lateFusion_logRuntime{trainedModelDetails['logcatRuntimeThreshold']}_truncDuration{trainedModelDetails['truncatedDuration']}_malwarePercent{trainedModelDetails['malwarePercent']}.pkl")
+        savePath = os.path.join(savePath,f"HPC_Object_logRuntime{trainedModelDetails['logcatRuntimeThreshold']}_truncDuration{trainedModelDetails['truncatedDuration']}_malwarePercent{trainedModelDetails['malwarePercent']}.pkl")
         
-        lateFusionInstance = late_stage_fusion(args=self.args)
-        lateFusionInstance.load_fusion_object(fpath=savePath)
+        HPC_classifier_inst = HPC_classifier(args=self.args)
+        HPC_classifier_inst.load_HPC_clf_object(fpath=savePath)
         ##############################################################################################
 
         ################################### Load the dataset for all classification tasks ###################################
@@ -1081,68 +1116,35 @@ class orchestrator:
                                                         logcatRuntimeThreshold=logcatRuntimeThreshold,
                                                         truncatedDuration=truncatedDuration)
         featureEngineeredData = loadDatasetInst.load_dataset()
-
-        # For testing the globl and hpc base classifiers
-        dfvs_X_test, dfvs_Y_test, dvfs_fileList = featureEngineeredData['DVFS_individual']['test']
-        hpc_X_test, hpc_Y_test, hpc_fileList = featureEngineeredData['HPC_individual']['test']
-
-        # XTrainSG dataset generation
-        hpc_X_trainSG, hpc_Y_trainSG, hpc_fileListSG = featureEngineeredData['HPC_partition_for_HPC_DVFS_fusion']['test']
-        globl_X_trainSG, globl_Y_trainSG, globl_fileListSG = featureEngineeredData['DVFS_partition_for_HPC_DVFS_fusion']['test']
-        XtestGLOBL_HPC= {"globl":globl_X_trainSG, "hpc":hpc_X_trainSG}
-        YtestGLOBL_HPC= {"globl":globl_Y_trainSG, "hpc":hpc_Y_trainSG}
+        hpc_X_test, hpc_Y_test, hpc_fileList_test = featureEngineeredData['test']
         #####################################################################################################################
 
         ######################################## Resampler ########################################
         rmInst = resample_dataset(malwarePercent=self.malwarePercent)
-        dfvs_X_test, dfvs_Y_test = rmInst.resampleBaseTensor(X=dfvs_X_test, y=dfvs_Y_test)
         hpc_X_test, hpc_Y_test = rmInst.resampleHpcTensor(Xlist=hpc_X_test, yList=hpc_Y_test)
-        XtestGLOBL_HPC_res, YtestGLOBL_HPC_res = rmInst.resampleFusionTensor(XtestGLOBL_HPC=XtestGLOBL_HPC, YtestGLOBL_HPC=YtestGLOBL_HPC)
         ###########################################################################################
 
         ################################### Test the HPC and DVFS base classifiers ###################################
         print(f" - Testing the hpc and globl base classifiers -")
-        lateFusionInstance.stage1evalGLOBL(XtestGLOBL=dfvs_X_test, YtestGLOBL=dfvs_Y_test, updateObjectPerformanceMetrics=True, print_performance_metric=print_performance_metric)
-        lateFusionInstance.stage1evalHPC(XtestHPC=hpc_X_test, YtestHPC=hpc_Y_test, updateObjectPerformanceMetrics=True, print_performance_metric=print_performance_metric)
+        HPC_classifier_inst.stage1evalHPC(XtestHPC=hpc_X_test, YtestHPC=hpc_Y_test, updateObjectPerformanceMetrics=True, print_performance_metric=print_performance_metric)
         ##############################################################################################################
 
-        ################################### Test the GLOBL and HPC-GLOBL fusion ###################################
-        print(f" - Testing the globl fusion and hpc-globl fusion -")
-        # Testing the globl fusion module
-        lateFusionInstance.stage2_globlFusion_ensemble_eval(Xeval=dfvs_X_test, 
-                                                            Yeval=dfvs_Y_test, 
-                                                            updateObjectPerformanceMetrics=True, 
-                                                            print_performance_metric=print_performance_metric,
-                                                            splitType="testing")
-
-        XtrainSG = lateFusionInstance.generateTrainSGdataset(XtestGLOBL_HPC=XtestGLOBL_HPC_res, YtestGLOBL_HPC = YtestGLOBL_HPC_res)
-        # Generate the hpc-globl fusion scores
-        lateFusionInstance.stage2_hpcGlobl_ensemble_eval(XtrainSG = XtrainSG, 
-                                                        updateObjectPerformanceMetrics=True, 
-                                                        print_performance_metric=print_performance_metric,
-                                                        splitType="testing")
-        # Generate the hpc-globl-rf scores
-        lateFusionInstance.stage2_Eval(XtrainSG, secondStage_modelType='RF', updateObjectPerformanceMetrics=True, print_performance_metric=True)
-        ###########################################################################################################
-        
-        # Save the hash list used for testing the hpc-globl fusion classifiers
-        for grpIndx, (groupName, fileHashList) in enumerate(lateFusionInstance.hpcGloblTestFileHashlist.copy().items()):
-            lateFusionInstance.hpcGloblTestFileHashlist[groupName] = late_stage_fusion.get_hashList_from_fileList(file_paths=globl_fileListSG[grpIndx])
-        
+        # Save the hash list used for testing 
+        HPC_classifier_inst.baseClassifierTestFileHashList = HPC_classifier.get_train_test_hashList(file_paths=hpc_fileList_test)
+            
         if print_performance_metric:
             print(f"Summary of performance metrics for dataset : {self.datasetName}, logcatRuntimeThreshold : {logcatRuntimeThreshold}, truncatedDuration : {truncatedDuration}")
-            lateFusionInstance.pretty_print_performance_metric(baseClfPerfFlag=True, globlFusionPerfFlag=True, hpcGloblFusionPerfFlag=True)
+            HPC_classifier_inst.pretty_print_performance_metric()
         
-        # Save the updated late stage fusion objects
-        if saveLateStageFusionObject:
-            savePath = os.path.join(self.xmd_base_folder_location, "res", "trainedModels", self.datasetName)
+        # Save the updated HPC objects
+        if save_HPC_Clf_Object:
+            savePath = os.path.join(self.kumal_base_folder_location, "res", "trainedModels", self.datasetName)
             if not os.path.isdir(savePath):
                 os.mkdir(savePath)
-            savePath = os.path.join(savePath,f"lateFusion_logRuntime{logcatRuntimeThreshold}_truncDuration{truncatedDuration}_malwarePercent{self.malwarePercent}_trainedModel{trainedModelDetails['logcatRuntimeThreshold']}_{trainedModelDetails['truncatedDuration']}_{trainedModelDetails['malwarePercent']}.pkl")
-            self.lateStageFusionObject[logcatRuntimeThreshold][truncatedDuration] = savePath
-            lateFusionInstance.save_fusion_object(fpath=savePath)
+            savePath = os.path.join(savePath,f"HPC_Object_logRuntime{logcatRuntimeThreshold}_truncDuration{truncatedDuration}_malwarePercent{self.malwarePercent}_trainedModel{trainedModelDetails['logcatRuntimeThreshold']}_{trainedModelDetails['truncatedDuration']}_{trainedModelDetails['malwarePercent']}.pkl")
+            HPC_classifier_inst.save_HPC_clf_object(fpath=savePath)
 
-        return lateFusionInstance
+        return HPC_classifier_inst
 
     
 
@@ -1271,7 +1273,7 @@ class orchestrator:
                     raise ValueError(f"Incorrect dataset name specified: {datasetName}") 
 
                 lateFusionInstance = late_stage_fusion(args=self.args)
-                lateFusionInstance.load_fusion_object(fpath=savePath)
+                lateFusionInstance.load_HPC_clf_object(fpath=savePath)
                 #########################################################################################################
 
                 #################################### Get the performance metric from the lateFusionInstance ###################################
@@ -1350,7 +1352,7 @@ class orchestrator:
             raise ValueError(f"Incorrect dataset name passed: {datasetName}")
 
         lateFusionInstance = late_stage_fusion(args=args)
-        lateFusionInstance.load_fusion_object(fpath=savePath)
+        lateFusionInstance.load_HPC_clf_object(fpath=savePath)
 
         # Pretty print the performance metrics
         lateFusionInstance.pretty_print_performance_metric(baseClfPerfFlag=True, globlFusionPerfFlag=True, hpcGloblFusionPerfFlag=True)
@@ -1478,7 +1480,7 @@ class orchestrator:
         # savePath = os.path.join(xmd_base_folder_location, "res", "trainedModels", datasetName)
         # savePath = os.path.join(savePath,f"lateFusion_logRuntime{0}_truncDuration{30}.pkl")
         # lateFusionInstance = late_stage_fusion(args=args)
-        # lateFusionInstance.load_fusion_object(fpath=savePath)
+        # lateFusionInstance.load_HPC_clf_object(fpath=savePath)
         # lateFusionInstance.pretty_print_performance_metric(baseClfPerfFlag=True, globlFusionPerfFlag=True, hpcGloblFusionPerfFlag=True)
 
         # pScore = performanceMetricAggregator.getAggregatePerformanceMetric(lateFusionInstance=lateFusionInstance, 
@@ -1533,8 +1535,8 @@ def main_worker(args, xmd_base_folder_location):
         - xmd_base_folder_location: Location of base folder of xmd
     """
     # resample_dataset.unitTestResampler()
-    baseRFmodel.unit_test_baseRFmodel(args=args)
-    # late_stage_fusion.unit_test_lateStageFusion(args=args)
+    # baseRFmodel.unit_test_baseRFmodel(args=args)
+    HPC_classifier.unit_test_HPC_classifier(args=args)
     # featureEngineeredDatasetLoader.unit_test_featureEngineeredDatasetLoader()
     # orchestrator.unit_test_orchestrator(args=args, xmd_base_folder_location= xmd_base_folder_location)
 

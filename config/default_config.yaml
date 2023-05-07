@@ -7,7 +7,7 @@ runtime_per_file: 15                                  # Runtime measured by the 
 num_logcat_lines_per_file: 0                         # Number of logcat events in the logcat file 
 freq_logcat_event_per_file: 0                         # Average frequency of the logcat events i.e. number of logcat events per second
 
-dataset_name: 'cdyear2-dataset'                       # Dataset name (Can take one of the following values: {'std-dataset', 'cdyear1-dataset', 'cdyear2-dataset', 'cdyear3-dataset'})
+dataset_name: 'cdyear3-dataset'                       # Dataset name (Can take one of the following values: {'std-dataset', 'cdyear1-dataset', 'cdyear2-dataset', 'cdyear3-dataset'})
 dataset_download_flag: True                           # Flag that decides whether or not to download the dataset from Dropbox
 num_download_threads: 30                              # Number of files you want to simultaneuously download
 ################################################################################################################################

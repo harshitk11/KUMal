@@ -30,14 +30,11 @@ baremetal_data_collection_framework/androzoo/top_app_androzoo_info.json
 avclass/
 
 # Ignore res files
-res/featureEngineeredDatasetDetails
 res/trainedModels
-res/filesToDelete.txt
 res/hpc_histogram_pkl_files
 config/default_config_copy.yaml
 res/featureEngineeredDataset_details
+res/featureEngineeredDataset_details/dataset_info_num_apk.json
 # Ignore plots
 plots/
-
-
 

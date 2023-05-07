@@ -103,6 +103,88 @@
       "NumBenignAPK": 398,
       "NumMalwareAPK": 358,
       "logcatRuntimeThreshold": 10
+    },
+    "20": {
+      "NumBenignAPK": 379,
+      "NumMalwareAPK": 334,
+      "logcatRuntimeThreshold": 20
+    },
+    "30": {
+      "NumBenignAPK": 365,
+      "NumMalwareAPK": 312,
+      "logcatRuntimeThreshold": 30
+    },
+    "40": {
+      "NumBenignAPK": 345,
+      "NumMalwareAPK": 304,
+      "logcatRuntimeThreshold": 40
+    },
+    "50": {
+      "NumBenignAPK": 340,
+      "NumMalwareAPK": 301,
+      "logcatRuntimeThreshold": 50
+    },
+    "60": {
+      "NumBenignAPK": 320,
+      "NumMalwareAPK": 293,
+      "logcatRuntimeThreshold": 60
+    },
+    "70": {
+      "NumBenignAPK": 273,
+      "NumMalwareAPK": 240,
+      "logcatRuntimeThreshold": 70
+    },
+    "80": {
+      "NumBenignAPK": 189,
+      "NumMalwareAPK": 189,
+      "logcatRuntimeThreshold": 80
+    }
+  },
+  "cdyear3-dataset": {
+    "0": {
+      "NumBenignAPK": 370,
+      "NumMalwareAPK": 450,
+      "logcatRuntimeThreshold": 0
+    },
+    "10": {
+      "NumBenignAPK": 252,
+      "NumMalwareAPK": 382,
+      "logcatRuntimeThreshold": 10
+    },
+    "20": {
+      "NumBenignAPK": 223,
+      "NumMalwareAPK": 358,
+      "logcatRuntimeThreshold": 20
+    },
+    "30": {
+      "NumBenignAPK": 213,
+      "NumMalwareAPK": 343,
+      "logcatRuntimeThreshold": 30
+    },
+    "40": {
+      "NumBenignAPK": 205,
+      "NumMalwareAPK": 327,
+      "logcatRuntimeThreshold": 40
+    },
+    "50": {
+      "NumBenignAPK": 198,
+      "NumMalwareAPK": 321,
+      "logcatRuntimeThreshold": 50
+    },
+    "60": {
+      "NumBenignAPK": 190,
+      "NumMalwareAPK": 304,
+      "logcatRuntimeThreshold": 60
+    },
+    "70": {
+      "NumBenignAPK": 167,
+      "NumMalwareAPK": 253,
+      "logcatRuntimeThreshold": 70
+    },
+    "80": {
+      "NumBenignAPK": 141,
+      "NumMalwareAPK": 200,
+      "logcatRuntimeThreshold": 80
     }
   }
 }
