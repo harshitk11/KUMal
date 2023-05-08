@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 from prettytable import MSWORD_FRIENDLY
 from scipy.stats import entropy
 from sklearn.metrics import roc_curve, auc
-
+from extract_metainfo_from_parserinfo import get_dataset_metainfo
 
 
 BENIGN_LABEL = 0
