@@ -68,7 +68,7 @@ class ImagePlottingTools:
     """
     Contains all the methods for creating the plots.
     """
-    def multiLinePlot(df, performanceMetric, plotTitle, saveLocation=None):
+    def multiLinePlot_perfVslrt(df, performanceMetric, plotTitle, saveLocation=None):
         """
         Draws a multi line plot using seaborn.
         params:
@@ -80,7 +80,6 @@ class ImagePlottingTools:
             - Saves the plot at saveLocation
         """
         # Convert to wide-form representation
-        # df_wide = df.pivot(index='truncatedDuration', columns='logcatRuntimeThreshold', values='performanceMetric')
         df_wide = df.pivot(index='logcatRuntimeThreshold', columns='truncatedDuration', values='performanceMetric') # for perf vs. lrt plot
         
         sns.set_style("ticks")
@@ -92,11 +91,41 @@ class ImagePlottingTools:
         plt.xticks(weight="bold")
         plt.yticks(weight="bold")
         plt.title(plotTitle, weight="bold")
-        # plt.xlabel("Truncated Duration", weight="bold")
         plt.xlabel("Logcat Runtime Threshold", weight="bold")
         plt.ylabel(performanceMetric, weight="bold")
-        # plt.legend(title="logcatRuntimeThreshold", prop={'weight': 'bold'})
         plt.legend(title="Truncated Duration", prop={'weight': 'bold'})
+        # plt.ylim(0.75, 0.9)
+        sns.despine(top=True, right=True)
+        plt.tight_layout()
+        if saveLocation:
+            plt.savefig(saveLocation, dpi=300)   
+            
+    def multiLinePlot_perfVsTD(df, performanceMetric, plotTitle, saveLocation=None):
+        """
+        Draws a multi line plot using seaborn.
+        params:
+            - df : Dataframe {'truncatedDuration':truncatedDuration_tracker, 'logcatRuntimeThreshold': logcatRuntimeThreshold_tracker, 'performanceMetric':performanceMetric_tracker}
+            - performanceMetric : Used for labeling the yaxis
+            - plotTitle : Title of the plot
+            - saveLocation: If passed, then will save the plot at this location.
+        Output:
+            - Saves the plot at saveLocation
+        """
+        # Convert to wide-form representation
+        df_wide = df.pivot(index='truncatedDuration', columns='logcatRuntimeThreshold', values='performanceMetric')
+        
+        sns.set_style("ticks")
+        sns.set(font_scale=1.2)
+        sns.set(rc={'figure.figsize':(10,7)})
+        sns.lineplot(data=df_wide, markers=True, markersize=15)
+
+        plt.rcParams["font.weight"] = "bold"
+        plt.xticks(weight="bold")
+        plt.yticks(weight="bold")
+        plt.title(plotTitle, weight="bold")
+        plt.xlabel("Truncated Duration", weight="bold")
+        plt.ylabel(performanceMetric, weight="bold")
+        plt.legend(title="logcatRuntimeThreshold", prop={'weight': 'bold'})
         # plt.ylim(0.75, 0.9)
         sns.despine(top=True, right=True)
         plt.tight_layout()
@@ -523,7 +552,7 @@ class HPC_classifier:
         # List of file hashes used for testing the base classifiers
         self.baseClassifierTestFileHashList = None 
          
-        # List of performance metrics for all the base classifiers of GLOBL channels and HPC groups. 
+        # List of performance metrics for all the base classifiers of HPC groups. 
         stage1ClfPerformanceMetricTemplate = {chnGrpName: None for chnGrpName in HPC_classifier.hpcGroupNameList}
         self.stage1ClassifierPerformanceMetrics = {"training":stage1ClfPerformanceMetricTemplate.copy(), "testing":stage1ClfPerformanceMetricTemplate.copy()}
         ###########################################################################################################
@@ -536,7 +565,7 @@ class HPC_classifier:
             params:
                 - XtrainHPC: [dataset_group1, dataset_group2, dataset_group3, dataset_group4] | dataset shape: (1, Nsamples, feature_size)
                 - YtrainHPC: [labels_group1, labels_group2, labels_group3, labels_group4] | labels_shape: (Nsamples,)
-                - updateObjectPerformanceMetrics: If True, then will update the performance metrics of the globl base classifiers.
+                - updateObjectPerformanceMetrics: If True, then will update the performance metrics of the classifiers.
                 
             Output:
                 - Populates the self.hpcGroupBaseClf
@@ -669,7 +698,7 @@ class HPC_classifier:
             - metaInfo (list): [(hash, it, rn), (hash, it, rn), ...)]
         """
         metaInfo = []
-        regex_pattern = r'.*\/(.*)__.*it(\d*)_rn(\d*).txt'
+        regex_pattern = r'.*\/([A-F0-9]{64})__.*it(\d*)_rn(\d*).txt'
 
         # Parse this file list to extract the hashes
         for filename in file_paths_list:
@@ -678,7 +707,6 @@ class HPC_classifier:
             file_hash_string = file_hash_obj.group(1).strip()
             iter_val = int(file_hash_obj.group(2).strip())
             rn_val = int(file_hash_obj.group(3).strip())
-            
             metaInfo.append((file_hash_string, iter_val, rn_val))
 
         return metaInfo
@@ -815,7 +843,7 @@ class HPC_classifier:
         ###################################################
         
         # Testing the training module
-        print(f" - Training the hpc and globl base classifiers -")
+        print(f" - Training the hpc classifiers -")
         HPC_clfInst = HPC_classifier(args=args)
         # HPC_clfInst.stage1trainHPC(XtrainHPC=hpc_x_train, YtrainHPC=hpc_y_train, updateObjectPerformanceMetrics=True)
         
@@ -823,7 +851,7 @@ class HPC_classifier:
         # HPC_clfInst.pretty_print_performance_metric()
 
         # # Testing the evaluation module
-        # print(f" - Evaluating the hpc and globl base classifiers -")
+        # print(f" - Evaluating the hpc classifiers -")
         # allGroupPredictions = HPC_clfInst.stage1evalHPC(XtestHPC=hpc_x_test, YtestHPC=hpc_y_test, updateObjectPerformanceMetrics=True, print_performance_metric=True)
 
         # print(" - Shape of the predicted labels post evaluation -")
@@ -965,7 +993,7 @@ class orchestrator:
         self.kumal_base_folder_location = kumal_base_folder_location
 
 
-    def std_dataset_tasks(self, logcatRuntimeThreshold, truncatedDuration, print_performance_metric, saveTrainedModels, trainHPCClassifiers):
+    def std_dataset_tasks(self, logcatRuntimeThreshold, truncatedDuration, print_performance_metric, saveTrainedModels, trainHPCClassifiers, trainedModelDirectoryName):
         """
         Tasks:
             -Load the dataset for all the classification tasks.
@@ -979,6 +1007,7 @@ class orchestrator:
             - print_performance_metric (bool): If True, then print the performance metrics for all evaluations.
             - saveTrainedModels (bool): If True, then save the lateStageFusion object in the trainedModels folder.
             - trainHPCClassifiers (bool): If True, then train the HPC base classifiers.
+            - trainedModelDirectoryName (str): Name of the directory where the trained models are stored.
         Output:
             - HPC_classifier_inst : Instance of the object storing all the trained models
         """
@@ -1004,7 +1033,7 @@ class orchestrator:
         HPC_classifier_inst = None
         if trainHPCClassifiers:
             ######################################### Train the HPC classifiers ########################################
-            print(f" - Training the hpc and globl base classifiers -")
+            print(f" - Training the hpc classifiers -")
             HPC_classifier_inst = HPC_classifier(args=self.args)
             HPC_classifier_inst.stage1trainHPC(XtrainHPC=hpc_X_train, YtrainHPC=hpc_Y_train, updateObjectPerformanceMetrics=True)
             ############################################################################################################
@@ -1027,7 +1056,7 @@ class orchestrator:
         
             # Save the trained models
             if saveTrainedModels:
-                savePath = os.path.join(self.kumal_base_folder_location, "res", "trainedModels", self.datasetName)
+                savePath = os.path.join(self.kumal_base_folder_location, "res", trainedModelDirectoryName, self.datasetName)
                 if not os.path.isdir(savePath):
                     os.makedirs(savePath)
                 savePath = os.path.join(savePath,f"HPC_Object_logRuntime{logcatRuntimeThreshold}_truncDuration{truncatedDuration}_malwarePercent{self.malwarePercent}.pkl")
@@ -1035,14 +1064,14 @@ class orchestrator:
         
         else:
             # Load the saved object containing the trained models
-            savePath = os.path.join(self.kumal_base_folder_location, "res", "trainedModels", self.datasetName)
+            savePath = os.path.join(self.kumal_base_folder_location, "res", trainedModelDirectoryName, self.datasetName)
             savePath = os.path.join(savePath,f"HPC_Object_logRuntime{logcatRuntimeThreshold}_truncDuration{truncatedDuration}_malwarePercent{self.malwarePercent}.pkl")
             HPC_classifier_inst = HPC_classifier(args=self.args)
             HPC_classifier_inst.load_HPC_clf_object(fpath=savePath)
 
         return HPC_classifier_inst
 
-    def cd_dataset_tasks(self, trainedModelDetails, logcatRuntimeThreshold, truncatedDuration, print_performance_metric, save_HPC_Clf_Object):
+    def cd_dataset_tasks(self, trainedModelDetails, logcatRuntimeThreshold, truncatedDuration, print_performance_metric, save_HPC_Clf_Object, trainedModelDirectoryName):
         """
         Tasks:
             -Load the trained model.
@@ -1057,12 +1086,13 @@ class orchestrator:
             - logcatRuntimeThreshold (int), truncatedDuration (int): Used for loading the dataset for the classification task
             - print_performance_metric (bool): If True, then print the performance metrics for all evaluations.
             - save_HPC_Clf_Object (bool): If True, then save the updated HPC_classifier object.
+            - trainedModelDirectoryName (str): Name of the directory where the trained models are stored.
         
         Output:
             - lateFusionInstance : Instance of the object storing all the update performance evaluation metrics        
         """
         ################################### Load the trained model ###################################
-        savePath = os.path.join(self.kumal_base_folder_location, "res", "trainedModels", "std-dataset")
+        savePath = os.path.join(self.kumal_base_folder_location, "res", trainedModelDirectoryName, "std-dataset")
         savePath = os.path.join(savePath,f"HPC_Object_logRuntime{trainedModelDetails['logcatRuntimeThreshold']}_truncDuration{trainedModelDetails['truncatedDuration']}_malwarePercent{trainedModelDetails['malwarePercent']}.pkl")
         
         HPC_classifier_inst = HPC_classifier(args=self.args)
@@ -1084,10 +1114,10 @@ class orchestrator:
         hpc_X_test, hpc_Y_test, hpc_fileList_test = rmInst.resampleHpcTensor(Xlist=hpc_X_test, yList=hpc_Y_test, filePathList=hpc_fileList_test)
         ###########################################################################################
 
-        ################################### Test the HPC and DVFS base classifiers ###################################
-        print(f" - Testing the hpc and globl base classifiers -")
+        ################################### Test the HPC and classifiers ###################################
+        print(f" - Testing the hpc classifiers -")
         HPC_classifier_inst.stage1evalHPC(XtestHPC=hpc_X_test, YtestHPC=hpc_Y_test, updateObjectPerformanceMetrics=True, print_performance_metric=print_performance_metric)
-        ##############################################################################################################
+        ####################################################################################################
 
         # Save the hash list used for testing 
         HPC_classifier_inst.baseClassifierTestFileHashList = HPC_classifier.get_train_test_hashList(file_paths_list_for_all_groups=hpc_fileList_test)
@@ -1098,7 +1128,7 @@ class orchestrator:
         
         # Save the updated HPC objects
         if save_HPC_Clf_Object:
-            savePath = os.path.join(self.kumal_base_folder_location, "res", "trainedModels", self.datasetName)
+            savePath = os.path.join(self.kumal_base_folder_location, "res", trainedModelDirectoryName, self.datasetName)
             if not os.path.isdir(savePath):
                 os.mkdir(savePath)
             savePath = os.path.join(savePath,f"HPC_Object_logRuntime{logcatRuntimeThreshold}_truncDuration{truncatedDuration}_malwarePercent{self.malwarePercent}_trainedModel{trainedModelDetails['logcatRuntimeThreshold']}_{trainedModelDetails['truncatedDuration']}_{trainedModelDetails['malwarePercent']}.pkl")
@@ -1107,8 +1137,7 @@ class orchestrator:
         return HPC_classifier_inst
 
     
-
-    def logcat_runtime_vs_truncated_duration_grid(self, trainHPCClassifiers, trainedModelDetails = None):
+    def logcat_runtime_vs_truncated_duration_grid(self, trainHPCClassifiers, trainedModelDetails = None, trainedModelDirectoryName = None):
         """
         Performs a grid search over logcatRuntimeThreshold and truncatedDuration for the following tasks.
             Tasks:
@@ -1122,6 +1151,7 @@ class orchestrator:
                 - trainedModelDetails (dict) : {"logcatRuntimeThreshold": (int), "truncatedDuration" : (int), "malwarePercent": (float)}
                                                 If this parameter is passed then grid search using the cd-dataset is performed using this trained model.
                                                 Else, the same config trained model is used for testing the corresponding cd-dataset instance.
+                - trainedModelDirectoryName (str): Name of the directory where the trained models are stored.
         """
         datasetType, _ = dataloader_generator.get_dataset_type_and_partition_dist(dataset_name = self.datasetName)
         
@@ -1148,7 +1178,8 @@ class orchestrator:
                                             logcatRuntimeThreshold=logcatRuntimeThreshold, 
                                             truncatedDuration=truncatedDuration, 
                                             print_performance_metric=True, 
-                                            save_HPC_Clf_Object=True)                
+                                            save_HPC_Clf_Object=True,
+                                            trainedModelDirectoryName=trainedModelDirectoryName)                
                     
         elif (datasetType == "std-dataset"):
             # Generate the trained models by doing gridsearch over logcatRuntimeThreshold and truncatedDuration.
@@ -1164,13 +1195,14 @@ class orchestrator:
                                             truncatedDuration=truncatedDuration, 
                                             print_performance_metric=True, 
                                             saveTrainedModels=True,
-                                            trainHPCClassifiers=trainHPCClassifiers)                
+                                            trainHPCClassifiers=trainHPCClassifiers,
+                                            trainedModelDirectoryName=trainedModelDirectoryName)                
         
         else:
             raise ValueError(f"Incomplete arguments : datasetType is {datasetType} and trainedModelDetails is {trainedModelDetails}.")
 
 
-    def prettyPrintGridPerformanceMetrics(self, datasetName, performanceMetricType, malwarePercent, trainedModelDetails=None):
+    def prettyPrintGridPerformanceMetrics(self, datasetName, performanceMetricType, malwarePercent, trainedModelDetails=None, trainedModelDirectoryName="trainedModels"):
         """
         Pretty prints the performance metrics over the search grid of logcatRuntimeThreshold and truncatedDuration.
         Edit this method if you want a different performance metric.
@@ -1189,6 +1221,7 @@ class orchestrator:
                                         -> Used for loading the corresponding trained model
                                         -> If dataset is cd, and trainedModelDetails is specified, then the corresponding trained model
                                             is used for generating the grid.
+            - trainedModelDirectoryName (str) : Name of the directory where the trained models are stored.
 
         Output:
             - gridTable (PrettyTable) : Contains the performance metric over the grid of truncatedDuration and logcatRuntimeThreshold
@@ -1210,7 +1243,7 @@ class orchestrator:
 
             for truncatedDuration in self.candidateTruncatedDurations:
                 ################################### Load the saved HPC_classifier_instance ###################################
-                savePath = os.path.join(self.kumal_base_folder_location, "res", "trainedModels", datasetName)
+                savePath = os.path.join(self.kumal_base_folder_location, "res", trainedModelDirectoryName, datasetName)
                 
                 if datasetType == "std-dataset":
                     savePath = os.path.join(savePath,f"HPC_Object_logRuntime{logcatRuntimeThreshold}_truncDuration{truncatedDuration}_malwarePercent{malwarePercent}.pkl")
@@ -1245,8 +1278,8 @@ class orchestrator:
             \nSplitType: {performanceMetricType['splitType']}")
         
         print(gridTable)
-        print("--------------------------------------------------")
-        print(gridTable.get_csv_string())
+        # print("--------------------------------------------------")
+        # print(gridTable.get_csv_string())
 
         
         ####################################################### Generate the plot #######################################################
@@ -1258,16 +1291,22 @@ class orchestrator:
         else:
             trainedModelFileName = None
 
-        ImagePlottingTools.multiLinePlot(df=df, 
+        ImagePlottingTools.multiLinePlot_perfVsTD(df=df, 
                                         performanceMetric=performanceMetricType['performanceMetricName'], 
                                         plotTitle=f"Performance over lRT vs. tD grid {performanceMetricType['performanceMetricName']}",
-                                        saveLocation=f"/data/hkumar64/projects/arm-telemetry/KUMal/plots/analysis/{datasetName}_{performanceMetricType['performanceMetricName']}_{performanceMetricType['class_of_interest']}_{performanceMetricType['hpc-group-name']}_{performanceMetricType['splitType']}_model_{trainedModelFileName}.png")
+                                        saveLocation=f"/data/hkumar64/projects/arm-telemetry/KUMal/plots/analysis/perf_vs_td_{datasetName}_{performanceMetricType['performanceMetricName']}_{performanceMetricType['class_of_interest']}_{performanceMetricType['hpc-group-name']}_{performanceMetricType['splitType']}_model_{trainedModelFileName}.png")
+        
+        # ImagePlottingTools.multiLinePlot_perfVslrt(df=df, 
+        #                                 performanceMetric=performanceMetricType['performanceMetricName'], 
+        #                                 plotTitle=f"Performance over lRT vs. tD grid {performanceMetricType['performanceMetricName']}",
+        #                                 saveLocation=f"/data/hkumar64/projects/arm-telemetry/KUMal/plots/analysis/perf_vs_lrt_{datasetName}_{performanceMetricType['performanceMetricName']}_{performanceMetricType['class_of_interest']}_{performanceMetricType['hpc-group-name']}_{performanceMetricType['splitType']}_model_{trainedModelFileName}.png")
+        
         #################################################################################################################################
 
         return gridTable
 
     @staticmethod
-    def print_lateFusionObject_performanceMetrics(kumal_base_folder_location, datasetName, truncatedDuration, logcatRuntimeThreshold, malwarePercent, trainedModelDetails, args):
+    def print_lateFusionObject_performanceMetrics(kumal_base_folder_location, datasetName, truncatedDuration, logcatRuntimeThreshold, malwarePercent, trainedModelDetails, args, trainedModelDirectoryName):
         """
         Prints all the performance metric stored in the late fusion object
         params:
@@ -1275,14 +1314,16 @@ class orchestrator:
             - datasetName: Used for accessing the corresponding HPC_classifier object
             - truncatedDuration, logcatRuntimeThreshold, malwarePercent: Used for accessing the HPC_classifier object for the cd-dataset
             - trainedModelDetails: Used for accessing the HPC_classifier object
+            - args: Passed to the HPC_classifier object
+            - trainedModelDirectoryName: Used for accessing the HPC_classifier object
         """
         # Load the late stage fusion object
         datasetType, _ = dataloader_generator.get_dataset_type_and_partition_dist(dataset_name = datasetName)
         if datasetType == 'std-dataset':
-            savePath = os.path.join(kumal_base_folder_location, "res", "trainedModels", "std-dataset")
+            savePath = os.path.join(kumal_base_folder_location, "res", trainedModelDirectoryName, "std-dataset")
             savePath = os.path.join(savePath,f"HPC_Object_logRuntime{trainedModelDetails['logcatRuntimeThreshold']}_truncDuration{trainedModelDetails['truncatedDuration']}_malwarePercent{trainedModelDetails['malwarePercent']}.pkl")
         elif datasetType == 'cd-dataset':
-            savePath = os.path.join(kumal_base_folder_location, "res", "trainedModels", datasetName)
+            savePath = os.path.join(kumal_base_folder_location, "res", trainedModelDirectoryName, datasetName)
             savePath = os.path.join(savePath,f"HPC_Object_logRuntime{logcatRuntimeThreshold}_truncDuration{truncatedDuration}_malwarePercent{malwarePercent}_trainedModel{trainedModelDetails['logcatRuntimeThreshold']}_{trainedModelDetails['truncatedDuration']}_{trainedModelDetails['malwarePercent']}.pkl")
         else:
             raise ValueError(f"Incorrect dataset name passed: {datasetName}")
@@ -1307,20 +1348,6 @@ class orchestrator:
                     datasetName=datasetName, 
                     malwarePercent=0.5,
                     kumal_base_folder_location=kumal_base_folder_location)
-    
-        # # Grid search all parameter using the trained model.
-        # for logcatRuntimeThreshold in orchInst.candidateLogcatRuntimeThresholds:
-        #     for truncatedDuration in orchInst.candidateTruncatedDurations:
-        #         print(f" ---------- Generating late-stage-fusion instance for logcatRuntimeThreshold {logcatRuntimeThreshold} and truncatedDuration {truncatedDuration} ----------")
-                
-        #         savedTrainedModelDetails = {"logcatRuntimeThreshold": 0, "truncatedDuration" : truncatedDuration, "malwarePercent":0.5}
-        
-        #         orchInst.cd_dataset_tasks(trainedModelDetails=savedTrainedModelDetails,
-        #                                 logcatRuntimeThreshold=logcatRuntimeThreshold, 
-        #                                 truncatedDuration=truncatedDuration, 
-        #                                 print_performance_metric=True, 
-        #                                 save_HPC_Clf_Object=True)  
-                
         
         # Generate the performance vs. lRT plot
         performanceMetricType = {"class_of_interest": "class-1", 
@@ -1337,16 +1364,28 @@ class orchestrator:
     
     @staticmethod
     def unit_test_orchestrator(args, kumal_base_folder_location):
-        basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset"
-        orchestrator.perf_vs_lrt(args, kumal_base_folder_location)
-        exit()
+        # basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset"
+        # trainedModelDirectoryName = "trainedModels"
+        basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset_fineGrained"
+        trainedModelDirectoryName = "trainedModels_finegrained"
+        
+        # # Plotting the Peformance vs. lRT plot (for different TD models)
+        # orchestrator.perf_vs_lrt(args, kumal_base_folder_location)
+        # exit()
+        
         # ########################## Testing std-dataset tasks ##########################
         # orchInst = orchestrator(args=args, 
         #                         basePath_featureEngineeredDataset=basePath_featureEngineeredDataset, 
         #                         datasetName="std-dataset", 
         #                         malwarePercent=0.5,
         #                         kumal_base_folder_location=kumal_base_folder_location)
-        # orchInst.std_dataset_tasks(logcatRuntimeThreshold=0, truncatedDuration=10, print_performance_metric=True, saveTrainedModels=True, trainHPCClassifiers=True)                
+        
+        # orchInst.std_dataset_tasks(logcatRuntimeThreshold=0, 
+        #                            truncatedDuration=1, 
+        #                            print_performance_metric=True, 
+        #                            saveTrainedModels=True, 
+        #                            trainHPCClassifiers=True,
+        #                            trainedModelDirectoryName=trainedModelDirectoryName)                
         # exit()
         # ##############################################################################
         
@@ -1357,8 +1396,13 @@ class orchestrator:
         #                         malwarePercent=0.5,
         #                         kumal_base_folder_location=kumal_base_folder_location)
         # # Trained model to be used for testing
-        # trainedModelDetails = {"logcatRuntimeThreshold":0, "truncatedDuration":10, "malwarePercent":0.5}
-        # orchInst.cd_dataset_tasks(trainedModelDetails=trainedModelDetails, logcatRuntimeThreshold=0, truncatedDuration=10, print_performance_metric=True, save_HPC_Clf_Object=True)                
+        # trainedModelDetails = {"logcatRuntimeThreshold":0, "truncatedDuration":1, "malwarePercent":0.5}
+        # orchInst.cd_dataset_tasks(trainedModelDetails=trainedModelDetails, 
+        #                         logcatRuntimeThreshold=0, 
+        #                         truncatedDuration=1, 
+        #                         print_performance_metric=True, 
+        #                         save_HPC_Clf_Object=True,
+        #                         trainedModelDirectoryName=trainedModelDirectoryName)                
         # exit()
         # ################################################################################
         
@@ -1372,7 +1416,8 @@ class orchestrator:
         # trainedModelDetails = {"logcatRuntimeThreshold":75, "truncatedDuration":90, "malwarePercent":0.5}
         trainedModelDetails=None
         orchInst.logcat_runtime_vs_truncated_duration_grid(trainHPCClassifiers=True,
-                                                            trainedModelDetails=trainedModelDetails) 
+                                                            trainedModelDetails=trainedModelDetails,
+                                                            trainedModelDirectoryName=trainedModelDirectoryName) 
         exit()
         #############################################################################
 
@@ -1389,7 +1434,8 @@ class orchestrator:
         #                                                         logcatRuntimeThreshold=logcatRuntimeThreshold, 
         #                                                         malwarePercent=malwarePercent, 
         #                                                         trainedModelDetails=trainedModelDetails, 
-        #                                                         args=args)
+        #                                                         args=args,
+        #                                                         trainedModelDirectoryName=trainedModelDirectoryName)
         # exit()
         # ###############################################################################################################
         
@@ -1402,17 +1448,17 @@ class orchestrator:
 
         ############################################################## To be used as reference ###################################################################################################
         # performanceMetricType (dict): {
-        #                                   "class_of_interest": "benign", "malware", or "summary",
+        #                                   "class_of_interest": "class-0", "class-1", or "summary",
         #                                   "splitType": "training" or "testing",
         #                                   "hpc-group-name": "hpc-group-1", "hpc-group-2", "hpc-group-3", "hpc-group-4", or "all"
         #                                   "performanceMetricName": 'f1', 'precision', or 'recall'
         #                               }
         ##########################################################################################################################################################################################
 
-        performanceMetricType = {"class_of_interest": "summary", 
+        performanceMetricType = {"class_of_interest": "class-0", 
                                 "splitType": "testing", 
-                                "hpc-group-name": "hpc-group-4", 
-                                "performanceMetricName": 'f1'}
+                                "hpc-group-name": "all", 
+                                "performanceMetricName": 'recall'}
         
         # trainedModelDetails = {"logcatRuntimeThreshold":0, "truncatedDuration":90, "malwarePercent":0.5}
         trainedModelDetails = None
@@ -1420,12 +1466,118 @@ class orchestrator:
         orchInst.prettyPrintGridPerformanceMetrics(datasetName = "std-dataset", 
                                                     performanceMetricType = performanceMetricType,
                                                     malwarePercent=0.5,
-                                                    trainedModelDetails=trainedModelDetails)
+                                                    trainedModelDetails=trainedModelDetails,
+                                                    trainedModelDirectoryName=trainedModelDirectoryName)
         ############################################################################################
 
+class performance_vs_runtime:
+    def __init__(self, args, kumal_base_folder_location, datasetName, basePath_featureEngineeredDataset, malwarePercent) -> None:
+        self.args = args
+        self.kumal_base_folder_location = kumal_base_folder_location
+        self.datasetName = datasetName
+        self.basePath_featureEngineeredDataset = basePath_featureEngineeredDataset
+        self.malwarePercent = malwarePercent # Used to resample the test data
+        
+        # List of candidate logcat runtime thresholds
+        self.logcat_rtimeThreshold_list = [i for i in range(0, args.collected_duration, args.step_size_logcat_runtimeThreshold)]
+        
+        # Get the runtime information for all the samples in this dataset
+        self.dataset_metaInfo = get_dataset_metainfo(dataset_name=datasetName, base_dir_path=kumal_base_folder_location)
+        
+        
+    @staticmethod
+    def extract_fileMetaInfo_from_file_list(file_list_for_all_groups):
+        """
+        Extracts the meta information from the file list for all the groups
+        params:
+            - file_list_for_all_groups (list): List of file lists for all the groups [file_list_group_1, file_list_group_2, ...]
+        Output:
+            - meta_info_list_for_all_groups (list): List of meta information for all the groups [meta_info_group_1, meta_info_group_2, ...]
+        """      
+        fileMetaInfo_list_for_all_groups = []
+        for _, groupFileList in enumerate(file_list_for_all_groups):
+            fileMetaInfo_list_for_all_groups.append(HPC_classifier.get_metaInfo_from_fileList(groupFileList))
+        return fileMetaInfo_list_for_all_groups
+    
+    def extract_runtime_info_from_metainfo(self, fileMetaInfo_list_for_all_groups, runtimeInfo_selector=0):
+        """
+        Extracts the runtime information from the file meta information for all the groups
+        params:
+            - fileMetaInfo_list_for_all_groups (list): List of meta information for all the groups [meta_info_group_1, meta_info_group_2, ...]
+            - runtimeInfo_selector (int): 0=runtime_per_file, 1=num_logcat_lines_per_file, 2=freq_logcat_event_per_file
+            - self.dataset_metaInfo (dict): Dictionary containing the meta information for all the samples in this dataset
+        Output:
+            - runtime_info_list_for_all_groups (list): List of runtime information for all the groups [runtime_info_group_1, runtime_info_group_2, ...]
+                                                    -> runtime_info_group_i (list): List of runtime information for group-i -> Shape: (num_samples, )
+        """
+        runtime_info_list_for_all_groups = []
+        for fileMetaInfo_group_i in fileMetaInfo_list_for_all_groups:
+            runtime_info_list_for_group_i = []
+            
+            # Fetch the runtime information for all the samples in this group
+            for (file_hash_string, iter_val, rn_val) in fileMetaInfo_group_i:
+                runtime_info_list_for_group_i.append(self.dataset_metaInfo[file_hash_string][iter_val][rn_val][runtimeInfo_selector])
+            
+            runtime_info_list_for_all_groups.append(runtime_info_list_for_group_i)
+        return runtime_info_list_for_all_groups
+                
+    def generate_prediction_per_td_per_lrt(self, lrt, td, trainedModelDirectoryName, trainedModelDetails=None):
+        """
+        
+        """
+        # Load the trained model
+        savePath = os.path.join(self.kumal_base_folder_location, "res", trainedModelDirectoryName, "std-dataset")
+        savePath = os.path.join(savePath,f"HPC_Object_logRuntime{trainedModelDetails['logcatRuntimeThreshold']}_truncDuration{trainedModelDetails['truncatedDuration']}_malwarePercent{trainedModelDetails['malwarePercent']}.pkl")
+        HPC_classifier_inst = HPC_classifier(args=self.args)
+        HPC_classifier_inst.load_HPC_clf_object(fpath=savePath)
+        
+        # Load the dataset for all classification tasks
+        loadDatasetInst = featureEngineeredDatasetLoader(basePath_featureEngineeredDataset=self.basePath_featureEngineeredDataset,
+                                                        datasetName=self.datasetName,
+                                                        logcatRuntimeThreshold=lrt,
+                                                        truncatedDuration=td)
+        featureEngineeredData = loadDatasetInst.load_dataset()
+        hpc_X_test, hpc_Y_test, hpc_fileList_test = featureEngineeredData['test']
 
-
-
+        # Resample
+        rmInst = resample_dataset(malwarePercent=self.malwarePercent)
+        hpc_X_test, hpc_Y_test, hpc_fileList_test = rmInst.resampleHpcTensor(Xlist=hpc_X_test, yList=hpc_Y_test, filePathList=hpc_fileList_test)
+        
+        # Generate the predictions 
+        print(f" - Testing the hpc classifiers -")
+        allGroupPredictions = HPC_classifier_inst.stage1evalHPC(XtestHPC=hpc_X_test, YtestHPC=hpc_Y_test, updateObjectPerformanceMetrics=False, print_performance_metric=False)
+        
+        # Extract the runtime information for all the samples in this dataset
+        fileMetaInfo_list_for_all_groups = performance_vs_runtime.extract_fileMetaInfo_from_file_list(file_list_for_all_groups=hpc_fileList_test)
+        runtime_info_list_for_all_groups = self.extract_runtime_info_from_metainfo(fileMetaInfo_list_for_all_groups, runtimeInfo_selector=0)
+        
+        for filepath, filemetainfo, runtimeinfo in zip(hpc_fileList_test[0], fileMetaInfo_list_for_all_groups[0], runtime_info_list_for_all_groups[0]):
+            print(f"{filepath} -> {filemetainfo} -> {runtimeinfo}\n")
+        
+        
+    def generate_prediction_per_lrt():
+        pass
+        
+    def generate_entropy_vs_runtime():
+        pass
+    
+    def fetch_metainfo_for_test_samples():
+        pass
+    
+    @staticmethod
+    def unit_test_performance_vs_runtime(args, kumal_base_folder_location):
+        basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset"
+        
+        perfVruntime_inst = performance_vs_runtime(args=args, 
+                                                   kumal_base_folder_location=kumal_base_folder_location,
+                                                   datasetName="std-dataset",
+                                                   basePath_featureEngineeredDataset=basePath_featureEngineeredDataset,
+                                                   malwarePercent=0.5)
+        
+        trainedModelDetails = {"logcatRuntimeThreshold":0, "truncatedDuration":10, "malwarePercent":0.5}
+        perfVruntime_inst.generate_prediction_per_td_per_lrt(lrt=0, td=10, trainedModelDetails=trainedModelDetails)
+        
+        
 
 def main_worker(args, kumal_base_folder_location):
     """
@@ -1439,7 +1591,7 @@ def main_worker(args, kumal_base_folder_location):
     # HPC_classifier.unit_test_HPC_classifier(args=args)
     # featureEngineeredDatasetLoader.unit_test_featureEngineeredDatasetLoader()
     orchestrator.unit_test_orchestrator(args=args, kumal_base_folder_location= kumal_base_folder_location)
-
+    # performance_vs_runtime.unit_test_performance_vs_runtime(args=args, kumal_base_folder_location=kumal_base_folder_location)
 
 def main():
     ############################################## Setting up the experimental parameters ##############################################

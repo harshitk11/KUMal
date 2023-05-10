@@ -1,0 +1,7 @@
+# Updated config parameters for finer-grained sweep on truncated_duration and logcat_runtime_threshold
+collected_duration: 10                  # Only taking the first 10 seconds of the telemetry logs
+step_size_truncated_duration: 1         # Step size for incrementing the truncated duration
+step_size_logcat_runtimeThreshold: 1    # Step size for incrementing the logcat runtime threshold before downloading the dataset
+dataset_base_location: "/hdd_6tb/hkumar64/arm-telemetry/kumal_dataset_fineGrained"            # Base location where all the datasets will be downloaded
+create_runs_dir: True                                                             # If True, then will create a runs dir to track the experimental run
+dataset_name: 'cdyear3-dataset'

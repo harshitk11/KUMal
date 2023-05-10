@@ -19,7 +19,7 @@ def parse_json(json_path):
         hash_pattern = r'(?<=_)[A-F0-9]{64}(?=\.)'
         match = re.search(hash_pattern, filePath)
         if match:
-            hash_value = match.group()
+            hash_value = match.group().strip()
             # print("Output =", hash_value)
             parsed_json_obj[hash_value] = {}
         else:
@@ -33,8 +33,8 @@ def parse_json(json_path):
             iter_rn_pattern = r"_iter_(\d+)_rn(\d+)\."
             match = re.search(iter_rn_pattern, key)
             if match:
-                iter_value = match.group(1)
-                rn_value = match.group(2)
+                iter_value = int(match.group(1).strip())
+                rn_value = int(match.group(2).strip())
                 # print(f"iter={iter_value}, rn={rn_value}")
                 if iter_value not in parsed_json_obj[hash_value]:
                     parsed_json_obj[hash_value][iter_value] = {rn_value: value}

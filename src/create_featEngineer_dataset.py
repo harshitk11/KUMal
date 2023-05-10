@@ -546,9 +546,13 @@ def main_worker(args, xmd_base_folder_location):
         - xmd_base_folder_location: Location of base folder of xmd
     """
     # Generate the feature engineered dataset for all logcat runtime thresholds and truncated durations for this dataset.
+    # feature_engineered_dataset.generate_feature_engineered_dataset(args, xmd_base_folder_location, 
+    #                                                                featEngineerDatasetFolderName="featureEngineeredDataset", 
+    #                                                                FolderName_featureEngineeredDatasetDetails="featureEngineeredDataset_details")
+
     feature_engineered_dataset.generate_feature_engineered_dataset(args, xmd_base_folder_location, 
-                                                                   featEngineerDatasetFolderName="featureEngineeredDataset", 
-                                                                   FolderName_featureEngineeredDatasetDetails="featureEngineeredDataset_details")
+                                                                   featEngineerDatasetFolderName="featureEngineeredDataset_fineGrained", 
+                                                                   FolderName_featureEngineeredDatasetDetails="featureEngineeredDataset_details_fineGrained")
 
 def main():
     ############################################## Setting up the experimental parameters ##############################################

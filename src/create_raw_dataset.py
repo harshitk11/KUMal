@@ -169,8 +169,6 @@ class custom_collator(object):
     def __init__(self, args):
         # Parameters for truncating the hpc time series. Consider the first truncated_duration seconds of the iteration
         self.truncated_duration = args.truncated_duration
-        # Duration for which data is collected 
-        self.cd = args.collected_duration 
         # Feature engineering parameters for simpleperf files
         self.num_histogram_bins = args.num_histogram_bins
         # Flag to indicate if we want to feature engineer
