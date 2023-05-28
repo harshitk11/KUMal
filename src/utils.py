@@ -489,25 +489,26 @@ class malware_label_generator:
             sorted_class = {k: v for k, v in sorted(dist['CLASS'].items(), key=lambda item: item[1], reverse=True)}
             sorted_logbook[dataset] = {"CLASS": sorted_class, "FAM": sorted_fam}
 
-        malware_apk_per_dataset = {"std": 970, "cdyear1": 489, "cdyear2": 451, "cdyear3": 450}
-        # Normalize the distribution based on the number of malware apks in each dataset
-        for dataset, dist in sorted_logbook.items():
-            for key, value in dist['CLASS'].items():
-                sorted_logbook[dataset]['CLASS'][key] = int((value / malware_apk_per_dataset[dataset])*100)
-            for key, value in dist['FAM'].items():
-                sorted_logbook[dataset]['FAM'][key] = int((value / malware_apk_per_dataset[dataset])*100)
+        # # Normalize the distribution based on the number of malware apks in each dataset
+        # malware_apk_per_dataset = {"std": 970, "cdyear1": 489, "cdyear2": 451, "cdyear3": 450}
+        # for dataset, dist in sorted_logbook.items():
+        #     for key, value in dist['CLASS'].items():
+        #         sorted_logbook[dataset]['CLASS'][key] = int((value / malware_apk_per_dataset[dataset])*100)
+        #     for key, value in dist['FAM'].items():
+        #         sorted_logbook[dataset]['FAM'][key] = int((value / malware_apk_per_dataset[dataset])*100)
                 
-        # Pretty print the distribution_logbook
-        for dataset_, hash_info in sorted_logbook.items():
-            print(f"Dataset: {dataset_}")
-            for key_, value_ in hash_info.items():
-                print(f"{key_}: {value_}")
-            print("---------------------------------------------------")
+        # # Pretty print the distribution_logbook
+        # for dataset_, hash_info in sorted_logbook.items():
+        #     print(f"Dataset: {dataset_}")
+        #     for key_, value_ in hash_info.items():
+        #         print(f"{key_}: {value_}")
+        #     print("---------------------------------------------------")
         
-        # Save the sorted_logbook as a json file (NOTE: individual values are normalized)
-        with open(os.path.join(avreport_base_directory, "malware_characterization.json"), 'w') as file:
-            json.dump(sorted_logbook, file, indent=4)
+        # # Save the sorted_logbook as a json file (NOTE: individual values are normalized)
+        # with open(os.path.join(avreport_base_directory, "malware_characterization.json"), 'w') as file:
+        #     json.dump(sorted_logbook, file, indent=4)
             
+        return parsed_avclass_report_dataset, sorted_logbook
             
                     
 def benign_malware_characterization_table_generator(xmd_base_folder):

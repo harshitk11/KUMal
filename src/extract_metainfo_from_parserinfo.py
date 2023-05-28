@@ -5,6 +5,7 @@ Python script to extract the meta info from the parser info files
 import os
 import json
 import re
+from utils import malware_label_generator
 
 def parse_json(json_path):
     """
@@ -113,13 +114,22 @@ def get_dataset_metainfo(dataset_name, base_dir_path):
         else:
             raise(ValueError("Incorrect dataset type specified"))
 
+# def get_malware_hashClassFamily_dict(dataset_name, base_dir_path):
+#     """
+    
+#     """
+#     avreport_base_directory= os.path.join(base_dir_path, "res/dataset_characterization/avclass_reports")
+#     parsed_avclass_report_dataset, top_family_class_logbook = malware_label_generator.get_family_class_from_AVClass_report(avreport_base_directory)
+    
+#     dataset_name = os.replace(dataset_name, "-dataset", "")
+#     hashClassFamily_dict = parsed_avclass_report_dataset[dataset_name]
+#     top_family_class_logbook = top_family_class_logbook[dataset_name]
         
 def main():
     dir_path = os.path.dirname(os.path.realpath(__file__))
     base_folder_location = os.path.join(dir_path.replace("/src",""),"")
 
-    get_dataset_metainfo("std-dataset", base_folder_location)
-    parsed_json_obj = get_dataset_metainfo("cdyear3-dataset", base_folder_location)
+    parsed_json_obj = get_dataset_metainfo("std-dataset", base_folder_location)
         
 if __name__ == '__main__':
     main()

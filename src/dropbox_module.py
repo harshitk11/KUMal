@@ -255,7 +255,7 @@ def parse_logcat_files(dbx, dbx_path, dataset_type, benchmark_flag, f_save_base_
                     avg_freq = logcat_parser.get_average_frequency(logcat_parser.extract_events("../logcat_files/"+key+"/"+key2))
                     num_logcat_lines = logcat_parser.get_logcat_lines(logcat_parser.extract_events("../logcat_files/"+key+"/"+key2))
                     time_diff = logcat_parser.get_time_difference(logcat_parser.extract_events("../logcat_files/"+key+"/"+key2))
-                
+                    
                     # Create a dict entry of the stats for this logcat file
                     logcat_stats_entry = {}
                     logcat_stats_entry[key2] = [avg_freq, num_logcat_lines, time_diff]
@@ -489,8 +489,8 @@ def main():
         os.system(f"mkdir -p {base_folder_location}")
 
     # Generating parser_info for all the datasets [STD, CD, and BENCH dataset]
-    # create_parser_info_for_all_datasets_kumal(dbx, base_folder_location=base_folder_location, load_flag=0)
-    # exit()
+    create_parser_info_for_all_datasets_kumal(dbx, base_folder_location=base_folder_location, load_flag=1)
+    exit()
     
     # ################################################### Analyze the parser_info dicts ############################################################
     # Generate the runtime distribution plots

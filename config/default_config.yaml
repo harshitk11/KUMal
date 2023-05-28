@@ -3,7 +3,7 @@
 ############################################ Parameters for downloading the dataset ############################################
 step_size_logcat_runtimeThreshold: 10                  # Step size for incrementing the logcat runtime threshold before downloading the dataset
 # Threshold values for the logcat filter 
-runtime_per_file: 15                                  # Runtime measured by the logcat files [we perform a sweep on this value]
+runtime_per_file: 0                                  # Runtime measured by the logcat files [we perform a sweep on this value]
 num_logcat_lines_per_file: 0                         # Number of logcat events in the logcat file 
 freq_logcat_event_per_file: 0                         # Average frequency of the logcat events i.e. number of logcat events per second
 

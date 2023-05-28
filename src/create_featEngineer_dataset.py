@@ -233,7 +233,11 @@ class feature_engineered_dataset:
         self.results_path = results_path
         
         # List of candidate truncated durations
-        self.rtime_list = [i for i in range(args.step_size_truncated_duration, args.collected_duration+args.step_size_truncated_duration, args.step_size_truncated_duration)]
+        # self.rtime_list = [i for i in range(args.step_size_truncated_duration, args.collected_duration+args.step_size_truncated_duration, args.step_size_truncated_duration)]
+        
+        # List of candidate truncated durations (combined = fine grained + coarse grained)
+        self.rtime_list = [i for i in range(1, 10, 1)]  # 1 is the step size
+        self.rtime_list += [i for i in range(10, 90+5, 5)] # 5 is the step size
 
         # logcat_filter_rtime: Filter runtime used when filtering and downloading the dataset (in s) [Used for naming the output file]
         self.logcat_filter_rtime_threshold = args.runtime_per_file
@@ -384,7 +388,8 @@ class feature_engineered_dataset:
                                                         results_path = featEngDatsetBasePath)
             featEngineeringDriver.generate_feature_engineered_dataset_per_logcat_filter()
             #####################################################################################################################################################################
-            
+            print(f"------------------ Completed generating feature engineered dataset for logcat runtime threshold : {logcatRtimeThreshold} ------------------")
+            exit()
 
     def generate_feature_engineered_dataset_per_logcat_filter(self):
         """
@@ -550,9 +555,14 @@ def main_worker(args, xmd_base_folder_location):
     #                                                                featEngineerDatasetFolderName="featureEngineeredDataset", 
     #                                                                FolderName_featureEngineeredDatasetDetails="featureEngineeredDataset_details")
 
+    
+    # feature_engineered_dataset.generate_feature_engineered_dataset(args, xmd_base_folder_location, 
+    #                                                                featEngineerDatasetFolderName="featureEngineeredDataset_fineGrained", 
+    #                                                                FolderName_featureEngineeredDatasetDetails="featureEngineeredDataset_details_fineGrained")
+
     feature_engineered_dataset.generate_feature_engineered_dataset(args, xmd_base_folder_location, 
-                                                                   featEngineerDatasetFolderName="featureEngineeredDataset_fineGrained", 
-                                                                   FolderName_featureEngineeredDatasetDetails="featureEngineeredDataset_details_fineGrained")
+                                                                   featEngineerDatasetFolderName="featureEngineeredDataset_combined", 
+                                                                   FolderName_featureEngineeredDatasetDetails="featureEngineeredDataset_details_combined")
 
 def main():
     ############################################## Setting up the experimental parameters ##############################################

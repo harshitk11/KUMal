@@ -1590,8 +1590,8 @@ def main_worker(args, kumal_base_folder_location):
     # baseRFmodel.unit_test_baseRFmodel(args=args)
     # HPC_classifier.unit_test_HPC_classifier(args=args)
     # featureEngineeredDatasetLoader.unit_test_featureEngineeredDatasetLoader()
-    orchestrator.unit_test_orchestrator(args=args, kumal_base_folder_location= kumal_base_folder_location)
-    # performance_vs_runtime.unit_test_performance_vs_runtime(args=args, kumal_base_folder_location=kumal_base_folder_location)
+    # orchestrator.unit_test_orchestrator(args=args, kumal_base_folder_location= kumal_base_folder_location)
+    performance_vs_runtime.unit_test_performance_vs_runtime(args=args, kumal_base_folder_location=kumal_base_folder_location)
 
 def main():
     ############################################## Setting up the experimental parameters ##############################################
