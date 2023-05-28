@@ -1628,17 +1628,24 @@ class performance_vs_runtime:
         
         return prediction_all_groups_per_lrt, hpc_Y_test, runtime_info_list_for_all_groups
         
-    def generate_temporalDecisionEntropy_vs_runtime_per_lrt(self, lrt, trainedModelDirectoryName, trainedModelDetails):
-        # Get the merged_predictions for all the td for a given lrt, the ground truth labels, and the runtime information
-        # Calculate the temporal decision entropy for each sample using the merged_predictions
-        # Plot the temporal decision entropy vs runtime for each group
-        # Plot the temporal decision entropy vs runtime given the ground truth label = 0
-        # Plot the temporal decision entropy vs runtime given the ground truth label = 1
-        
+    def generate_temporalDecisionEntropy_vs_runtime_per_lrt(self, lrt, trainedModelDirectoryName, trainedModelDetails, plotFileName=None):
+        """
+        Generates the temporal decision entropy vs runtime box plot for a given lrt.
+        params:
+            - lrt (int): logcat_runtime_threshold -> Used for fetching the test data
+            - trainedModelDirectoryName (str): Name of the directory containing the trained model
+            - trainedModelDetails (dict): Dictionary containing the details of the trained model (logcatRuntimeThreshold, truncatedDuration, malwarePercent)
+            - plotFileName (str): Name of the file to save the plot
+        Output:
+            - entropy_list_for_all_groups (list): List of temporal decision entropy for all the groups [entropy_group_1, entropy_group_2, ...]
+                                                    -> entropy_group_i (numpy): List of temporal decision entropy for group-i -> Shape: (num_samples,)
+                                                    
+        """
+
         # Get the merged_predictions for all the td for a given lrt, the ground truth labels, and the runtime information
         prediction_all_groups_per_lrt, hpc_Y_test, runtime_info_list_for_all_groups = self.generate_prediction_per_lrt(lrt=lrt,
-                                                                                                           trainedModelDirectoryName=trainedModelDirectoryName,
-                                                                                                           trainedModelDetails=trainedModelDetails)
+                                                                                                                       trainedModelDirectoryName=trainedModelDirectoryName,
+                                                                                                                       trainedModelDetails=trainedModelDetails)
 
         # Calculate the temporal decision entropy for each sample using the merged_predictions
         entropy_list_for_all_groups = []
@@ -1647,22 +1654,141 @@ class performance_vs_runtime:
             entropy_array = entropy(histogram_array, axis=1, base=2) # Shape: (num_samples,)
             entropy_list_for_all_groups.append(entropy_array)
 
-        # Plot the temporal decision entropy vs runtime for each group
-        for i, (entropy_list, runtime_list) in enumerate(zip(entropy_list_for_all_groups, runtime_info_list_for_all_groups)):
-            plt.scatter(runtime_list, entropy_list, label=f'Group {i+1}')
-        plt.xlabel('Runtime')
-        plt.ylabel('Temporal Decision Entropy')
-        plt.legend()
-        plt.title('Temporal Decision Entropy vs Runtime')
-        plt.savefig("tempdecEntropy_vs_runtime.png")
+        if plotFileName is not None:
+            # Create subplots for each group
+            num_groups = len(entropy_list_for_all_groups)
+            fig, axes = plt.subplots(num_groups, 1, figsize=(10, num_groups * 5))
+
+            # Define runtime bins
+            runtime_bins = np.arange(0, 95, 5)
+
+            for i, (entropy_list, runtime_list) in enumerate(zip(entropy_list_for_all_groups, runtime_info_list_for_all_groups)):
+                # Bin runtime values and calculate median entropy for each bin
+                binned_entropy_list = [entropy_list[(runtime_list >= low) & (runtime_list < high)] for low, high in zip(runtime_bins[:-1], runtime_bins[1:])]
+
+                # Box plot of entropy per runtime bin
+                axes[i].boxplot(binned_entropy_list, labels=runtime_bins[:-1])
+                axes[i].set_xlabel('Runtime')
+                axes[i].set_ylabel('Temporal Decision Entropy')
+                axes[i].set_title(f'Group {i+1}')
+
+            plt.tight_layout()
+            plt.savefig(plotFileName, dpi=300)
+        return entropy_list_for_all_groups
+
+    @staticmethod
+    def calculate_performance_metrics(Y_true, Y_pred):
+        """
+        Calculates performance metrics (precision, recall, f1-score, accuracy) for a given set of ground truth labels and predictions.
+        params:
+            - Y_true (numpy.ndarray): Ground truth labels
+            - Y_pred (numpy.ndarray): Predictions
+        Output:
+            - metrics (dict): Dictionary containing the performance metrics
+        """
+
+        from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
+
+        precision = precision_score(Y_true, Y_pred)
+        recall = recall_score(Y_true, Y_pred)
+        f1 = f1_score(Y_true, Y_pred)
+        accuracy = accuracy_score(Y_true, Y_pred)
+
+        metrics = {
+            'precision': precision,
+            'recall': recall,
+            'f1_score': f1,
+            'accuracy': accuracy
+        }
+        return metrics
     
-    def generate_performance_vs_runtime_per_lrt():
+    def generate_performance_vs_runtime_per_lrt(self, lrt, trainedModelDirectoryName, trainedModelDetails, plotFileName=None):
+        """
+        Generates the performance vs runtime box plot for a given lrt.
+        params:
+            - lrt (int): logcat_runtime_threshold -> Used for fetching the test data
+            - trainedModelDirectoryName (str): Name of the directory containing the trained model
+            - trainedModelDetails (dict): Dictionary containing the details of the trained model (logcatRuntimeThreshold, truncatedDuration, malwarePercent)
+            - plotFileName (str): Name of the file to save the plot
+        Output:
+            - performance_metrics_for_all_groups (list): List of performance metrics for all the groups [metrics_group_1, metrics_group_2, ...]
+                                                        -> metrics_group_i (dict): Dict of performance metrics for group-i
+        """
+
         # Get the merged_predictions for all the td for a given lrt, the ground truth labels, and the runtime information
-        # For each td dimension in merged_predictions, calculate the overall performance grouped by the runtime information
-        # Runtime information can be discretized into bins that equally divide the runtime range in 100 bins
-        # For each bin, calculate the performance (TPR, FPR, FNR, TNR, Precision, Recall, F1-score, Accuracy) using the corresponding predictions and ground truth labels
-        pass
-    
+        prediction_all_groups_per_lrt, hpc_Y_test, runtime_info_list_for_all_groups = self.generate_prediction_per_lrt(lrt=lrt,
+                                                                                                                       trainedModelDirectoryName=trainedModelDirectoryName,
+                                                                                                                       trainedModelDetails=trainedModelDetails)
+                                                                                                                        
+        performance_metrics_for_all_groups = {}
+        runtime_bins = np.arange(0, 95, 5)
+        
+        for group_i, (predictions_group, Y_test_group, runtime_info_group) in enumerate(zip(prediction_all_groups_per_lrt, hpc_Y_test, runtime_info_list_for_all_groups)):
+            performance_metrics_for_all_groups[group_i] = {}
+            
+            for td_index, td_val in enumerate(self.truncated_duration_list): # For each td value, calculate the performance metrics
+                performance_metrics_for_all_groups[group_i][td_val] = {}
+                
+                for bin_low, bin_high in zip(runtime_bins[:-1], runtime_bins[1:]):
+                    mask = (runtime_info_group >= bin_low) & (runtime_info_group < bin_high)
+                    predictions_bin = predictions_group[:,td_index][mask]
+                    Y_test_bin = Y_test_group[mask]
+
+                    if len(Y_test_bin) > 0:  # skip empty bins
+                        metrics = self.calculate_performance_metrics(Y_test_bin, predictions_bin)
+                        performance_metrics_for_all_groups[group_i][td_val][bin_low] = {'metrics': metrics, 'support': len(Y_test_bin)}
+                    else:
+                        performance_metrics_for_all_groups[group_i][td_val][bin_low] = None
+
+
+        if plotFileName is not None:
+            for group_i in performance_metrics_for_all_groups:
+                fig, axs = plt.subplots(len(performance_metrics_for_all_groups[group_i]) + 1, 1, figsize=(15, 15))
+
+                # Create sub-plots for each td_val
+                for i, td_val in enumerate(performance_metrics_for_all_groups[group_i], 0):
+                    runtimes = []
+                    metrics = {'Precision': [], 'Recall': [], 'F1 Score': []}
+                    support = []
+                    
+                    for runtime, data in performance_metrics_for_all_groups[group_i][td_val].items():
+                        if data is not None: # Skip if data is None
+                            runtimes.append(runtime)
+                            metrics['Precision'].append(data['metrics']['precision'])
+                            metrics['Recall'].append(data['metrics']['recall'])
+                            metrics['F1 Score'].append(data['metrics']['f1_score'])
+                            support.append(data['support'])
+
+                    x = np.arange(len(runtimes))  # the label locations
+                    width = 0.3  # the width of the bars
+
+                    axs[i].bar(x - width/3, metrics['Precision'], width, label='Precision')
+                    axs[i].bar(x, metrics['Recall'], width, label='Recall')
+                    axs[i].bar(x + width/3, metrics['F1 Score'], width, label='F1 Score')
+
+                    axs[i].set_xticks(x)
+                    axs[i].set_xticklabels(runtimes)
+                    axs[i].set_title(f'Group: {group_i} - TD Value: {td_val}')
+                    axs[i].set_xlabel('Runtime')
+                    axs[i].set_ylabel('Metric Value')
+                
+                # Add support subplot
+                axs[-1].bar(runtimes, support, width, label='Support')
+                axs[-1].set_title(f'Group: {group_i} - Support')
+                axs[-1].set_xlabel('Runtime')
+                axs[-1].set_ylabel('Number of Samples')
+
+                # Place a legend to the right of this smaller subplot.
+                plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
+
+                plt.tight_layout()
+                plt.savefig(f'{plotFileName}_group_{group_i}.png')
+                plt.close()
+
+        return performance_metrics_for_all_groups
+
+
+
     @staticmethod
     def unit_test_performance_vs_runtime(args, kumal_base_folder_location):
         basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset"
@@ -1677,7 +1803,16 @@ class performance_vs_runtime:
         trainedModelDetails = {"logcatRuntimeThreshold":0, "truncatedDuration":10, "malwarePercent":0.5}
         # perfVruntime_inst.generate_prediction_per_td_per_lrt(lrt=0, td=10, trainedModelDirectoryName=trainedModelDirectoryName, trainedModelDetails=trainedModelDetails)
         # perfVruntime_inst.generate_prediction_per_lrt(lrt=0, trainedModelDirectoryName=trainedModelDirectoryName, trainedModelDetails=trainedModelDetails)
-        perfVruntime_inst.generate_temporalDecisionEntropy_vs_runtime_per_lrt(lrt=0, trainedModelDirectoryName=trainedModelDirectoryName, trainedModelDetails=trainedModelDetails)
+        # perfVruntime_inst.generate_temporalDecisionEntropy_vs_runtime_per_lrt(lrt=0, 
+        #                                                                       trainedModelDirectoryName=trainedModelDirectoryName, 
+        #                                                                       trainedModelDetails=trainedModelDetails,
+        #                                                                       plotFileName="temporalDecisionEntropy_vs_runtime.png")
+        perfVruntime_inst.generate_performance_vs_runtime_per_lrt(lrt=0,
+                                                                     trainedModelDirectoryName=trainedModelDirectoryName,
+                                                                     trainedModelDetails=trainedModelDetails,
+                                                                     plotFileName="performance_vs_runtime.png")
+
+
 
 def main_worker(args, kumal_base_folder_location):
     """
