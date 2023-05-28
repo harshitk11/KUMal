@@ -58,7 +58,7 @@ def get_dataset_metainfo(dataset_name, base_dir_path):
         Output:
             - parsed_json_obj: Parsed json object
             To access an entry in the parsed json object, use the following syntax:
-                parsed_json_obj[hash_value][iter_value][rn_value] = [runtime_per_file, num_logcat_lines_per_file, freq_logcat_event_per_file]
+                parsed_json_obj[hash_value][iter_value][rn_value] = [freq_logcat_event_per_file, num_logcat_lines_per_file, runtime_per_file]
         """
         
         if dataset_name == "std-dataset":

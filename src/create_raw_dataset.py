@@ -378,7 +378,6 @@ class dataset_split_generator:
 
         ################################## Handling the benign labels ##################################
         if benign_label is not None:
-            # Shuffle the dicts of benign and malware: Convert to list. Shuffle. 
             benign_label_list = list(benign_label.items())
 
             # Calculate the number of training, and test samples
@@ -399,7 +398,6 @@ class dataset_split_generator:
         ################################################################################################
         ################################## Handling the malware labels #################################
         if malware_label is not None:
-            # Shuffle the dicts of benign and malware: Convert to list. Shuffle. 
             malware_label_list = list(malware_label.items())
 
             # Calculate the number of training, trainSG, and test samples

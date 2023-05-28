@@ -32,11 +32,14 @@ avclass/
 # Ignore res files
 res/trainedModels
 res/trainedModels_finegrained
+res/trainedModels_combined
 res/hpc_histogram_pkl_files
 config/default_config_copy.yaml
 res/featureEngineeredDataset_details
 res/featureEngineeredDataset_details_fineGrained
+res/featureEngineeredDataset_details_combined
 res/featureEngineeredDataset_details/dataset_info_num_apk.json
+
 # Ignore plots
 plots/
 

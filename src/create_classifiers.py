@@ -979,10 +979,15 @@ class orchestrator:
         # Location of the base folder where all the feature engineered datasets are stored
         self.basePath_featureEngineeredDataset = basePath_featureEngineeredDataset
         
-        # List of logcat-runtime-thresholds and candidate-truncated-durations [Used for accessing the datasets]
-        self.candidateLogcatRuntimeThresholds = [i for i in range(0, args.collected_duration, args.step_size_logcat_runtimeThreshold)]
-        self.candidateTruncatedDurations = [i for i in range(args.step_size_truncated_duration, args.collected_duration+args.step_size_truncated_duration, args.step_size_truncated_duration)]
+        # # List of logcat-runtime-thresholds and candidate-truncated-durations [Used for accessing the datasets]
+        # self.candidateLogcatRuntimeThresholds = [i for i in range(0, args.collected_duration, args.step_size_logcat_runtimeThreshold)]
+        # self.candidateTruncatedDurations = [i for i in range(args.step_size_truncated_duration, args.collected_duration+args.step_size_truncated_duration, args.step_size_truncated_duration)]
 
+        # List of logcat-runtime-thresholds and candidate-truncated-durations [combined = fine-grained+coarse-grained]
+        self.candidateLogcatRuntimeThresholds = [0]
+        self.candidateTruncatedDurations = [i for i in range(1, 10, 1)]  # 1 is the step size
+        self.candidateTruncatedDurations += [i for i in range(10, 90+5, 5)] # 5 is the step size
+        
         # Name of the dataset 
         self.datasetName = datasetName
 
@@ -1366,8 +1371,10 @@ class orchestrator:
     def unit_test_orchestrator(args, kumal_base_folder_location):
         # basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset"
         # trainedModelDirectoryName = "trainedModels"
-        basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset_fineGrained"
-        trainedModelDirectoryName = "trainedModels_finegrained"
+        # basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset_fineGrained"
+        # trainedModelDirectoryName = "trainedModels_finegrained"
+        basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset_combined"
+        trainedModelDirectoryName = "trainedModels_combined"
         
         # # Plotting the Peformance vs. lRT plot (for different TD models)
         # orchestrator.perf_vs_lrt(args, kumal_base_folder_location)
@@ -1478,8 +1485,10 @@ class performance_vs_runtime:
         self.basePath_featureEngineeredDataset = basePath_featureEngineeredDataset
         self.malwarePercent = malwarePercent # Used to resample the test data
         
-        # List of candidate logcat runtime thresholds
-        self.logcat_rtimeThreshold_list = [i for i in range(0, args.collected_duration, args.step_size_logcat_runtimeThreshold)]
+        # List of candidate truncated durations
+        self.truncated_duration_list = [i for i in range(args.step_size_truncated_duration, args.collected_duration+args.step_size_truncated_duration, args.step_size_truncated_duration)]
+        # self.truncated_duration_list = [i for i in range(1, 10, 1)]  # 1 is the step size
+        # self.truncated_duration_list += [i for i in range(10, 90+5, 5)] # 5 is the step size
         
         # Get the runtime information for all the samples in this dataset
         self.dataset_metaInfo = get_dataset_metainfo(dataset_name=datasetName, base_dir_path=kumal_base_folder_location)
@@ -1499,12 +1508,12 @@ class performance_vs_runtime:
             fileMetaInfo_list_for_all_groups.append(HPC_classifier.get_metaInfo_from_fileList(groupFileList))
         return fileMetaInfo_list_for_all_groups
     
-    def extract_runtime_info_from_metainfo(self, fileMetaInfo_list_for_all_groups, runtimeInfo_selector=0):
+    def extract_runtime_info_from_metainfo(self, fileMetaInfo_list_for_all_groups, runtimeInfo_selector=2):
         """
         Extracts the runtime information from the file meta information for all the groups
         params:
             - fileMetaInfo_list_for_all_groups (list): List of meta information for all the groups [meta_info_group_1, meta_info_group_2, ...]
-            - runtimeInfo_selector (int): 0=runtime_per_file, 1=num_logcat_lines_per_file, 2=freq_logcat_event_per_file
+            - runtimeInfo_selector (int): 0=freq_logcat_event_per_file, 1=num_logcat_lines_per_file, 2=runtime_per_file
             - self.dataset_metaInfo (dict): Dictionary containing the meta information for all the samples in this dataset
         Output:
             - runtime_info_list_for_all_groups (list): List of runtime information for all the groups [runtime_info_group_1, runtime_info_group_2, ...]
@@ -1523,7 +1532,25 @@ class performance_vs_runtime:
                 
     def generate_prediction_per_td_per_lrt(self, lrt, td, trainedModelDirectoryName, trainedModelDetails=None):
         """
+        Generates predition (for all groups) using a trained model (specified by trainedModelDetails) for a given test-data 
+        config (logcat_runtime_threshold and truncated_duration).
+
+        params:
+            - lrt (int): logcat_runtime_threshold, td (int): truncated_duration -> Used for fetching the test data
+            - trainedModelDirectoryName (str): Name of the directory containing the trained model
+            - trainedModelDetails (dict): Dictionary containing the details of the trained model (logcatRuntimeThreshold, truncatedDuration, malwarePercent)
         
+        Output: prediction_list_for_all_groups, hpc_Y_test, runtime_info_list_for_all_groups
+            
+            - prediction_list_for_all_groups (list): List of predictions for all the groups [prediction_group_1, prediction_group_2, ...]
+                                                    -> prediction_group_i (numpy): List of predictions for group-i -> Shape: (num_samples, )
+            
+            - hpc_Y_test (list): List of ground truth labels for all the groups [hpc_Y_test_group_1, hpc_Y_test_group_2, ...]
+                                                    -> hpc_Y_test_group_i (numpy): List of ground truth labels for group-i -> Shape: (num_samples, )
+            
+            - runtime_info_list_for_all_groups (list): List of runtime information for all the groups [runtime_info_group_1, runtime_info_group_2, ...]
+                                                    -> runtime_info_group_i (list): List of runtime information for group-i -> Shape: (num_samples, )
+            
         """
         # Load the trained model
         savePath = os.path.join(self.kumal_base_folder_location, "res", trainedModelDirectoryName, "std-dataset")
@@ -1545,28 +1572,101 @@ class performance_vs_runtime:
         
         # Generate the predictions 
         print(f" - Testing the hpc classifiers -")
-        allGroupPredictions = HPC_classifier_inst.stage1evalHPC(XtestHPC=hpc_X_test, YtestHPC=hpc_Y_test, updateObjectPerformanceMetrics=False, print_performance_metric=False)
+        prediction_list_for_all_groups = HPC_classifier_inst.stage1evalHPC(XtestHPC=hpc_X_test, YtestHPC=hpc_Y_test, updateObjectPerformanceMetrics=False, print_performance_metric=False)
         
         # Extract the runtime information for all the samples in this dataset
         fileMetaInfo_list_for_all_groups = performance_vs_runtime.extract_fileMetaInfo_from_file_list(file_list_for_all_groups=hpc_fileList_test)
-        runtime_info_list_for_all_groups = self.extract_runtime_info_from_metainfo(fileMetaInfo_list_for_all_groups, runtimeInfo_selector=0)
+        runtime_info_list_for_all_groups = self.extract_runtime_info_from_metainfo(fileMetaInfo_list_for_all_groups, runtimeInfo_selector=2)
         
-        for filepath, filemetainfo, runtimeinfo in zip(hpc_fileList_test[0], fileMetaInfo_list_for_all_groups[0], runtime_info_list_for_all_groups[0]):
-            print(f"{filepath} -> {filemetainfo} -> {runtimeinfo}\n")
+        ## For debugging
+        # for filepath, filemetainfo, runtimeinfo in zip(hpc_fileList_test[0], fileMetaInfo_list_for_all_groups[0], runtime_info_list_for_all_groups[0]):
+        #     print(f"{filepath} -> {filemetainfo} -> {runtimeinfo}\n")
+        
+        return prediction_list_for_all_groups, hpc_Y_test, runtime_info_list_for_all_groups
         
         
-    def generate_prediction_per_lrt():
-        pass
         
-    def generate_entropy_vs_runtime():
-        pass
+    def generate_prediction_per_lrt(self, lrt, trainedModelDirectoryName, trainedModelDetails):
+        """
+        Generates prediction (for all groups) using a trained model (specified by trainedModelDetails) for a given test-data
+        config (logcat_runtime_threshold and truncated_duration).
+        params:
+            - lrt (int): logcat_runtime_threshold -> Used for fetching the test data    
+            - trainedModelDirectoryName (str): Name of the directory containing the trained model
+            - trainedModelDetails (dict): Dictionary containing the details of the trained model (logcatRuntimeThreshold, truncatedDuration, malwarePercent)
+        Output:
+            - prediction_all_groups_per_lrt (list): List of predictions for all the groups [prediction_group_1, prediction_group_2, ...]
+                                                    -> prediction_group_i (numpy): List of predictions for group-i -> Shape: (num_samples, num_td)
+            - hpc_Y_test_all_groups_per_lrt (list): List of ground truth labels for all the groups [hpc_Y_test_group_1, hpc_Y_test_group_2, ...]
+                                                    -> hpc_Y_test_group_i (numpy): List of ground truth labels for group-i -> Shape: (num_samples,)
+            - runtime_info_all_groups_per_lrt (list): List of runtime information for all the groups [runtime_info_group_1, runtime_info_group_2, ...]
+                                                    -> runtime_info_group_i (list): List of runtime information for group-i -> Shape: (num_samples,)
+        """
+        prediction_all_groups_per_lrt = []
+        
+        # Merge the predictions for all the td for each group.
+        merged_predictions = [[] for i in range(4)] # One list for each group
+            
+        # For a given lrt, generate the predictions (for all groups) for all the td
+        for td_val in self.truncated_duration_list:
+            prediction_list_for_all_groups, hpc_Y_test, runtime_info_list_for_all_groups \
+                                        = self.generate_prediction_per_td_per_lrt(lrt=lrt,
+                                                                                td=td_val,
+                                                                                trainedModelDirectoryName=trainedModelDirectoryName,
+                                                                                trainedModelDetails=trainedModelDetails)
+
+            # sanity checks to ensure that the gt labels and runtime information are the same for all the td
+            assert len(prediction_list_for_all_groups) == len(hpc_Y_test) == len(runtime_info_list_for_all_groups) == len(merged_predictions), "Mismatch in the length of predictions, ground truth labels, and runtime information lists"
+            assert len(prediction_list_for_all_groups[0]) == len(hpc_Y_test[0]) == len(runtime_info_list_for_all_groups[0]), "Mismatch in the length of predictions, ground truth labels, and runtime information lists"
+            
+            # Sort the predictions into their respective groups for merged_predictions
+            for i in range(len(prediction_list_for_all_groups)):
+                merged_predictions[i].append(prediction_list_for_all_groups[i])
+                
+        # Stack the numpy array for each group
+        prediction_all_groups_per_lrt = [np.column_stack(merged_predictions[i]) for i in range(len(merged_predictions))]
+        
+        return prediction_all_groups_per_lrt, hpc_Y_test, runtime_info_list_for_all_groups
+        
+    def generate_temporalDecisionEntropy_vs_runtime_per_lrt(self, lrt, trainedModelDirectoryName, trainedModelDetails):
+        # Get the merged_predictions for all the td for a given lrt, the ground truth labels, and the runtime information
+        # Calculate the temporal decision entropy for each sample using the merged_predictions
+        # Plot the temporal decision entropy vs runtime for each group
+        # Plot the temporal decision entropy vs runtime given the ground truth label = 0
+        # Plot the temporal decision entropy vs runtime given the ground truth label = 1
+        
+        # Get the merged_predictions for all the td for a given lrt, the ground truth labels, and the runtime information
+        prediction_all_groups_per_lrt, hpc_Y_test, runtime_info_list_for_all_groups = self.generate_prediction_per_lrt(lrt=lrt,
+                                                                                                           trainedModelDirectoryName=trainedModelDirectoryName,
+                                                                                                           trainedModelDetails=trainedModelDetails)
+
+        # Calculate the temporal decision entropy for each sample using the merged_predictions
+        entropy_list_for_all_groups = []
+        for all_td_predictions_group in prediction_all_groups_per_lrt:
+            histogram_array = np.column_stack((np.sum(all_td_predictions_group == 0, axis=1), np.sum(all_td_predictions_group == 1, axis=1))) 
+            entropy_array = entropy(histogram_array, axis=1, base=2) # Shape: (num_samples,)
+            entropy_list_for_all_groups.append(entropy_array)
+
+        # Plot the temporal decision entropy vs runtime for each group
+        for i, (entropy_list, runtime_list) in enumerate(zip(entropy_list_for_all_groups, runtime_info_list_for_all_groups)):
+            plt.scatter(runtime_list, entropy_list, label=f'Group {i+1}')
+        plt.xlabel('Runtime')
+        plt.ylabel('Temporal Decision Entropy')
+        plt.legend()
+        plt.title('Temporal Decision Entropy vs Runtime')
+        plt.savefig("tempdecEntropy_vs_runtime.png")
     
-    def fetch_metainfo_for_test_samples():
+    def generate_performance_vs_runtime_per_lrt():
+        # Get the merged_predictions for all the td for a given lrt, the ground truth labels, and the runtime information
+        # For each td dimension in merged_predictions, calculate the overall performance grouped by the runtime information
+        # Runtime information can be discretized into bins that equally divide the runtime range in 100 bins
+        # For each bin, calculate the performance (TPR, FPR, FNR, TNR, Precision, Recall, F1-score, Accuracy) using the corresponding predictions and ground truth labels
         pass
     
     @staticmethod
     def unit_test_performance_vs_runtime(args, kumal_base_folder_location):
         basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset"
+        trainedModelDirectoryName="trainedModels_finegrained"
         
         perfVruntime_inst = performance_vs_runtime(args=args, 
                                                    kumal_base_folder_location=kumal_base_folder_location,
@@ -1575,9 +1675,9 @@ class performance_vs_runtime:
                                                    malwarePercent=0.5)
         
         trainedModelDetails = {"logcatRuntimeThreshold":0, "truncatedDuration":10, "malwarePercent":0.5}
-        perfVruntime_inst.generate_prediction_per_td_per_lrt(lrt=0, td=10, trainedModelDetails=trainedModelDetails)
-        
-        
+        # perfVruntime_inst.generate_prediction_per_td_per_lrt(lrt=0, td=10, trainedModelDirectoryName=trainedModelDirectoryName, trainedModelDetails=trainedModelDetails)
+        # perfVruntime_inst.generate_prediction_per_lrt(lrt=0, trainedModelDirectoryName=trainedModelDirectoryName, trainedModelDetails=trainedModelDetails)
+        perfVruntime_inst.generate_temporalDecisionEntropy_vs_runtime_per_lrt(lrt=0, trainedModelDirectoryName=trainedModelDirectoryName, trainedModelDetails=trainedModelDetails)
 
 def main_worker(args, kumal_base_folder_location):
     """
