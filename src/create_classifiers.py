@@ -1298,8 +1298,8 @@ class orchestrator:
 
         ImagePlottingTools.multiLinePlot_perfVsTD(df=df, 
                                         performanceMetric=performanceMetricType['performanceMetricName'], 
-                                        plotTitle=f"Performance over lRT vs. tD grid {performanceMetricType['performanceMetricName']}",
-                                        saveLocation=f"/data/hkumar64/projects/arm-telemetry/KUMal/plots/analysis/perf_vs_td_{datasetName}_{performanceMetricType['performanceMetricName']}_{performanceMetricType['class_of_interest']}_{performanceMetricType['hpc-group-name']}_{performanceMetricType['splitType']}_model_{trainedModelFileName}.png")
+                                        plotTitle=f"Performance vs. tD grid {performanceMetricType['performanceMetricName']}",
+                                        saveLocation=f"/data/hkumar64/projects/arm-telemetry/KUMal/plots/analysis/combined/perf_vs_td_{datasetName}_{performanceMetricType['performanceMetricName']}_{performanceMetricType['class_of_interest']}_{performanceMetricType['hpc-group-name']}_{performanceMetricType['splitType']}_model_{trainedModelFileName}.png")
         
         # ImagePlottingTools.multiLinePlot_perfVslrt(df=df, 
         #                                 performanceMetric=performanceMetricType['performanceMetricName'], 
@@ -1414,19 +1414,19 @@ class orchestrator:
         # ################################################################################
         
         
-        ######################## Testing grid search task ##########################
-        orchInst = orchestrator(args=args, 
-                                basePath_featureEngineeredDataset=basePath_featureEngineeredDataset, 
-                                datasetName="std-dataset", 
-                                malwarePercent=0.5,
-                                kumal_base_folder_location=kumal_base_folder_location)
-        # trainedModelDetails = {"logcatRuntimeThreshold":75, "truncatedDuration":90, "malwarePercent":0.5}
-        trainedModelDetails=None
-        orchInst.logcat_runtime_vs_truncated_duration_grid(trainHPCClassifiers=True,
-                                                            trainedModelDetails=trainedModelDetails,
-                                                            trainedModelDirectoryName=trainedModelDirectoryName) 
-        exit()
-        #############################################################################
+        # ######################## Testing grid search task ##########################
+        # orchInst = orchestrator(args=args, 
+        #                         basePath_featureEngineeredDataset=basePath_featureEngineeredDataset, 
+        #                         datasetName="std-dataset", 
+        #                         malwarePercent=0.5,
+        #                         kumal_base_folder_location=kumal_base_folder_location)
+        # # trainedModelDetails = {"logcatRuntimeThreshold":75, "truncatedDuration":90, "malwarePercent":0.5}
+        # trainedModelDetails=None
+        # orchInst.logcat_runtime_vs_truncated_duration_grid(trainHPCClassifiers=True,
+        #                                                     trainedModelDetails=trainedModelDetails,
+        #                                                     trainedModelDirectoryName=trainedModelDirectoryName) 
+        # exit()
+        # #############################################################################
 
         # ######################## Print the performance metrics of a late stage fusion object ##########################
         # datasetName = "std-dataset"
@@ -1462,7 +1462,7 @@ class orchestrator:
         #                               }
         ##########################################################################################################################################################################################
 
-        performanceMetricType = {"class_of_interest": "class-0", 
+        performanceMetricType = {"class_of_interest": "summary", 
                                 "splitType": "testing", 
                                 "hpc-group-name": "all", 
                                 "performanceMetricName": 'recall'}
@@ -1486,9 +1486,9 @@ class performance_vs_runtime:
         self.malwarePercent = malwarePercent # Used to resample the test data
         
         # List of candidate truncated durations
-        self.truncated_duration_list = [i for i in range(args.step_size_truncated_duration, args.collected_duration+args.step_size_truncated_duration, args.step_size_truncated_duration)]
-        # self.truncated_duration_list = [i for i in range(1, 10, 1)]  # 1 is the step size
-        # self.truncated_duration_list += [i for i in range(10, 90+5, 5)] # 5 is the step size
+        # self.truncated_duration_list = [i for i in range(args.step_size_truncated_duration, args.collected_duration+args.step_size_truncated_duration, args.step_size_truncated_duration)]
+        self.truncated_duration_list = [i for i in range(1, 10, 1)]  # 1 is the step size
+        self.truncated_duration_list += [i for i in range(10, 90+5, 5)] # 5 is the step size
         
         # Get the runtime information for all the samples in this dataset
         self.dataset_metaInfo = get_dataset_metainfo(dataset_name=datasetName, base_dir_path=kumal_base_folder_location)
@@ -1609,6 +1609,7 @@ class performance_vs_runtime:
             
         # For a given lrt, generate the predictions (for all groups) for all the td
         for td_val in self.truncated_duration_list:
+            trainedModelDetails['truncatedDuration'] = td_val # Using same config for train and test
             prediction_list_for_all_groups, hpc_Y_test, runtime_info_list_for_all_groups \
                                         = self.generate_prediction_per_td_per_lrt(lrt=lrt,
                                                                                 td=td_val,
@@ -1702,9 +1703,105 @@ class performance_vs_runtime:
         }
         return metrics
     
+    # def generate_performance_vs_runtime_per_lrt(self, lrt, trainedModelDirectoryName, trainedModelDetails, plotFileName=None):
+    #     """
+    #     Generates the performance vs runtime box plot for a given lrt.
+    #     params:
+    #         - lrt (int): logcat_runtime_threshold -> Used for fetching the test data
+    #         - trainedModelDirectoryName (str): Name of the directory containing the trained model
+    #         - trainedModelDetails (dict): Dictionary containing the details of the trained model (logcatRuntimeThreshold, truncatedDuration, malwarePercent)
+    #         - plotFileName (str): Name of the file to save the plot
+    #     Output:
+    #         - performance_metrics_for_all_groups (list): List of performance metrics for all the groups [metrics_group_1, metrics_group_2, ...]
+    #                                                     -> metrics_group_i (dict): Dict of performance metrics for group-i
+    #     """
+
+    #     # Get the merged_predictions for all the td for a given lrt, the ground truth labels, and the runtime information
+    #     prediction_all_groups_per_lrt, hpc_Y_test, runtime_info_list_for_all_groups = self.generate_prediction_per_lrt(lrt=lrt,
+    #                                                                                                                    trainedModelDirectoryName=trainedModelDirectoryName,
+    #                                                                                                                    trainedModelDetails=trainedModelDetails)
+                                                                                                                        
+    #     performance_metrics_for_all_groups = {}
+    #     runtime_bins = np.arange(0, 95, 5)
+        
+    #     # Combined runtime bins
+    #     # runtime_bins_coarse = np.arange(10, 95, 5)
+    #     # runtime_bins_fine = np.arange(0, 10, 1)
+    #     # runtime_bins = np.concatenate([runtime_bins_fine, runtime_bins_coarse])
+        
+    #     runtime_bins_fine = np.arange(0, 10, 2)
+    #     runtime_bins_coarse = np.arange(10, 100, 10)
+    #     runtime_bins = np.concatenate([runtime_bins_fine, runtime_bins_coarse])
+        
+        
+    #     for group_i, (predictions_group, Y_test_group, runtime_info_group) in enumerate(zip(prediction_all_groups_per_lrt, hpc_Y_test, runtime_info_list_for_all_groups)):
+    #         performance_metrics_for_all_groups[group_i] = {}
+            
+    #         for td_index, td_val in enumerate(self.truncated_duration_list): # For each td value, calculate the performance metrics
+    #             performance_metrics_for_all_groups[group_i][td_val] = {}
+                
+    #             for bin_low, bin_high in zip(runtime_bins[:-1], runtime_bins[1:]):
+    #                 mask = (runtime_info_group >= bin_low) & (runtime_info_group < bin_high)
+    #                 predictions_bin = predictions_group[:,td_index][mask]
+    #                 Y_test_bin = Y_test_group[mask]
+
+    #                 if len(Y_test_bin) > 0:  # skip empty bins
+    #                     metrics = self.calculate_performance_metrics(Y_test_bin, predictions_bin)
+    #                     performance_metrics_for_all_groups[group_i][td_val][bin_low] = {'metrics': metrics, 'support': len(Y_test_bin)}
+    #                 else:
+    #                     performance_metrics_for_all_groups[group_i][td_val][bin_low] = None
+
+
+    #     if plotFileName is not None:
+    #         for group_i in performance_metrics_for_all_groups:
+    #             fig, axs = plt.subplots(len(performance_metrics_for_all_groups[group_i]) + 1, 1, figsize=(40,40))
+
+    #             # Create sub-plots for each td_val
+    #             for i, td_val in enumerate(performance_metrics_for_all_groups[group_i], 0):
+    #                 runtimes = []
+    #                 metrics = {'Precision': [], 'Recall': [], 'F1 Score': []}
+    #                 support = []
+                    
+    #                 for runtime, data in performance_metrics_for_all_groups[group_i][td_val].items():
+    #                     if data is not None: # Skip if data is None
+    #                         runtimes.append(runtime)
+    #                         metrics['Precision'].append(data['metrics']['precision'])
+    #                         metrics['Recall'].append(data['metrics']['recall'])
+    #                         metrics['F1 Score'].append(data['metrics']['f1_score'])
+    #                         support.append(data['support'])
+
+    #                 x = np.arange(len(runtimes))  # the label locations
+    #                 width = 0.3  # the width of the bars
+
+    #                 axs[i].bar(x - width/3, metrics['Precision'], width, label='Precision')
+    #                 axs[i].bar(x, metrics['Recall'], width, label='Recall')
+    #                 axs[i].bar(x + width/3, metrics['F1 Score'], width, label='F1 Score')
+
+    #                 axs[i].set_xticks(x)
+    #                 axs[i].set_xticklabels(runtimes)
+    #                 axs[i].set_title(f'Group: {group_i} - TD Value: {td_val}')
+    #                 axs[i].set_xlabel('Runtime')
+    #                 axs[i].set_ylabel('Metric Value')
+                
+    #             # Add support subplot
+    #             # axs[-1].bar(runtimes, support, width, label='Support')
+    #             axs[-1].bar(runtimes, support, width)
+    #             axs[-1].set_title(f'Group: {group_i} - Support')
+    #             axs[-1].set_xlabel('Runtime')
+    #             axs[-1].set_ylabel('Number of Samples')
+
+    #             # Place a legend to the right of this smaller subplot.
+    #             plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
+
+    #             plt.tight_layout()
+    #             plt.savefig(f'{plotFileName}_group_{group_i}.png')
+    #             plt.close()
+
+    #     return performance_metrics_for_all_groups
+
     def generate_performance_vs_runtime_per_lrt(self, lrt, trainedModelDirectoryName, trainedModelDetails, plotFileName=None):
         """
-        Generates the performance vs runtime box plot for a given lrt.
+        Generates the performance vs runtime line plot for a given lrt.
         params:
             - lrt (int): logcat_runtime_threshold -> Used for fetching the test data
             - trainedModelDirectoryName (str): Name of the directory containing the trained model
@@ -1721,8 +1818,10 @@ class performance_vs_runtime:
                                                                                                                        trainedModelDetails=trainedModelDetails)
                                                                                                                         
         performance_metrics_for_all_groups = {}
-        runtime_bins = np.arange(0, 95, 5)
-        
+        runtime_bins_fine = np.arange(0, 10, 1)
+        runtime_bins_coarse = np.arange(10, 90+20, 20)
+        runtime_bins = np.concatenate([runtime_bins_fine, runtime_bins_coarse])
+        runtime_bins = np.array([0,5,30,60,90])
         for group_i, (predictions_group, Y_test_group, runtime_info_group) in enumerate(zip(prediction_all_groups_per_lrt, hpc_Y_test, runtime_info_list_for_all_groups)):
             performance_metrics_for_all_groups[group_i] = {}
             
@@ -1742,57 +1841,47 @@ class performance_vs_runtime:
 
 
         if plotFileName is not None:
+            from cycler import cycler
+            metric_names = ['Precision', 'Recall', 'f1_score']
+            linestyles = ['-', '--', '-.', ':']
+            markers = ['o', 'v', 's', 'D', 'P', '*', 'X', 'd']
+            colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+            style_cycler = cycler('linestyle', linestyles) * cycler('marker', markers) * cycler('color', colors)
+            
+            
             for group_i in performance_metrics_for_all_groups:
-                fig, axs = plt.subplots(len(performance_metrics_for_all_groups[group_i]) + 1, 1, figsize=(15, 15))
+                for metric_name in metric_names:
+                    fig, ax = plt.subplots(figsize=(15, 10))
+                    ax.set_prop_cycle(style_cycler)
+                    for runtime in runtime_bins[:-1]:
+                        metric_values = []
+                        for td_val in performance_metrics_for_all_groups[group_i]:
+                            if performance_metrics_for_all_groups[group_i][td_val][runtime] is not None:
+                                metric_values.append(performance_metrics_for_all_groups[group_i][td_val][runtime]['metrics'][metric_name.lower()])
+                            else:
+                                metric_values.append(None)
+                        ax.plot(self.truncated_duration_list, metric_values, label=f'Runtime: {runtime}s')
 
-                # Create sub-plots for each td_val
-                for i, td_val in enumerate(performance_metrics_for_all_groups[group_i], 0):
-                    runtimes = []
-                    metrics = {'Precision': [], 'Recall': [], 'F1 Score': []}
-                    support = []
-                    
-                    for runtime, data in performance_metrics_for_all_groups[group_i][td_val].items():
-                        if data is not None: # Skip if data is None
-                            runtimes.append(runtime)
-                            metrics['Precision'].append(data['metrics']['precision'])
-                            metrics['Recall'].append(data['metrics']['recall'])
-                            metrics['F1 Score'].append(data['metrics']['f1_score'])
-                            support.append(data['support'])
+                    plt.title(f'Group: {group_i} - {metric_name}')
+                    plt.xlabel('TD Value')
+                    plt.ylabel(f'{metric_name} Value')
+                    plt.legend()
 
-                    x = np.arange(len(runtimes))  # the label locations
-                    width = 0.3  # the width of the bars
-
-                    axs[i].bar(x - width/3, metrics['Precision'], width, label='Precision')
-                    axs[i].bar(x, metrics['Recall'], width, label='Recall')
-                    axs[i].bar(x + width/3, metrics['F1 Score'], width, label='F1 Score')
-
-                    axs[i].set_xticks(x)
-                    axs[i].set_xticklabels(runtimes)
-                    axs[i].set_title(f'Group: {group_i} - TD Value: {td_val}')
-                    axs[i].set_xlabel('Runtime')
-                    axs[i].set_ylabel('Metric Value')
-                
-                # Add support subplot
-                axs[-1].bar(runtimes, support, width, label='Support')
-                axs[-1].set_title(f'Group: {group_i} - Support')
-                axs[-1].set_xlabel('Runtime')
-                axs[-1].set_ylabel('Number of Samples')
-
-                # Place a legend to the right of this smaller subplot.
-                plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
-
-                plt.tight_layout()
-                plt.savefig(f'{plotFileName}_group_{group_i}.png')
-                plt.close()
+                    plt.tight_layout()
+                    plt.savefig(f'{plotFileName}_group_{group_i}_{metric_name}.png')
+                    plt.close()
 
         return performance_metrics_for_all_groups
 
 
-
     @staticmethod
     def unit_test_performance_vs_runtime(args, kumal_base_folder_location):
-        basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset"
-        trainedModelDirectoryName="trainedModels_finegrained"
+        # basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset"
+        # trainedModelDirectoryName = "trainedModels"
+        # basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset_fineGrained"
+        # trainedModelDirectoryName = "trainedModels_finegrained"
+        basePath_featureEngineeredDataset="/data/hkumar64/projects/arm-telemetry/KUMal/data/featureEngineeredDataset_combined"
+        trainedModelDirectoryName = "trainedModels_combined"
         
         perfVruntime_inst = performance_vs_runtime(args=args, 
                                                    kumal_base_folder_location=kumal_base_folder_location,
@@ -1800,7 +1889,7 @@ class performance_vs_runtime:
                                                    basePath_featureEngineeredDataset=basePath_featureEngineeredDataset,
                                                    malwarePercent=0.5)
         
-        trainedModelDetails = {"logcatRuntimeThreshold":0, "truncatedDuration":10, "malwarePercent":0.5}
+        trainedModelDetails = {"logcatRuntimeThreshold":0, "truncatedDuration":None, "malwarePercent":0.5}
         # perfVruntime_inst.generate_prediction_per_td_per_lrt(lrt=0, td=10, trainedModelDirectoryName=trainedModelDirectoryName, trainedModelDetails=trainedModelDetails)
         # perfVruntime_inst.generate_prediction_per_lrt(lrt=0, trainedModelDirectoryName=trainedModelDirectoryName, trainedModelDetails=trainedModelDetails)
         # perfVruntime_inst.generate_temporalDecisionEntropy_vs_runtime_per_lrt(lrt=0, 
