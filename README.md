@@ -1,4 +1,4 @@
-# Repository for the codebase and the dataset of XMD.
+# Repository for the codebase and the dataset of KUMal.
 ## Dataset-collection framework.
 For this study, we developed an automated bare-metal sandbox for large-scale data-collection of hardware telemetry logs. The framework supports Android-OS Client, and has been designed specifically for a Google Pixel-3 device. The Host PC where the main [orchestrator](/baremetal_data_collection_framework/orchestrator.py) runs is a Linux-OS based PC. To prevent local-storage overhead, the sandbox is closely integrated with cloud (Dropbox). After every completion of data-collection for every application (totalling 8 iterations of runs with a duration of 90 seconds per iteration), the logs are pushed to Dropbox saving local storage space. Please see [readme](/baremetal_data_collection_framework/README.md) of the bare-metal data collection framework for more info.
 
